@@ -24,7 +24,7 @@ Context free grammar:
 <comparison> ::= <term> 
 <term>       ::= <factor> ((PLUS | MINUS) <factor>  )*
 <factor>     ::= <primary> ((TIMES | DIV) <primary> )*
-<primary>    ::= TRUE | FALSE | Num
+<primary>    ::= TRUE | FALSE | Num | "(" <expr> ")"
 -}
 
 parse :: [Token] -> Ast
@@ -87,4 +87,10 @@ primary :: [Token] -> (Ast, [Token])
 primary (TRUE:xs)     = (Bool True, xs)
 primary (FALSE:xs)    = (Bool False, xs)
 primary ((Num nr):xs) = (Number nr, xs)
+primary (LEFT_PAREN:xs) = 
+    let
+        (ast, rest) = expr xs
+    in case rest of
+        (RIGHT_PAREN:xs) -> (ast, xs)
+        _ -> error "Missing enclosing ')'."
 primary _ = error "Expected an expression."

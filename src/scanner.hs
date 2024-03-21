@@ -13,6 +13,8 @@ data Token =
     | TIMES
     | OR
     | AND
+    | LEFT_PAREN
+    | RIGHT_PAREN 
     -- | ID String -- not now c:
     | Num Int
     | TRUE
@@ -38,6 +40,8 @@ tokenize ('+':xs) = PLUS  : tokenize xs
 tokenize ('-':xs) = MINUS : tokenize xs
 tokenize ('/':xs) = SLASH : tokenize xs
 tokenize ('*':xs) = TIMES : tokenize xs
+tokenize ('(':xs) = LEFT_PAREN  : tokenize xs
+tokenize (')':xs) = RIGHT_PAREN : tokenize xs
 tokenize ('|':'|':xs) = OR  : tokenize xs
 tokenize ('&':'&':xs) = AND : tokenize xs
 tokenize txt@(x:xs) 
