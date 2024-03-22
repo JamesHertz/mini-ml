@@ -2,8 +2,9 @@ module TypeChecker (
     Type(..),
     typeCheck
 ) where
+
 -- TODO: improve overall error reporting c:
-import Parser
+import Parser ( Ast(..) )
 
 data Type = IntType | BoolType deriving (Eq)
 

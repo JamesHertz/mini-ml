@@ -3,7 +3,7 @@ module Interpreter (
     eval
 )where
 
-import Parser
+import Parser ( Ast(..) )
 
 data Value = IntValue Int | BoolValue Bool deriving (Eq, Show)
 

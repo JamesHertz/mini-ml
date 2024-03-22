@@ -3,7 +3,7 @@ module Parser (
     parse
 )where
 
-import Scanner
+import Scanner ( Token(..) )
 
 data Ast = -- arithmetic
             Add  Ast Ast 
@@ -19,6 +19,7 @@ data Ast = -- arithmetic
           | GreaterThan   Ast Ast
           | LessThanEq    Ast Ast
           | GreaterThanEq Ast Ast
+        --   | Binary Ast Token Ast -- LATER: plans c:
           -- values
           | Number Int
           | Bool Bool
@@ -28,13 +29,13 @@ data Ast = -- arithmetic
 Context free grammar:
 <program>    ::=  <expr> EOF
 <expr>       ::= <logicalAnd>
-<logicalAnd> ::= <logicalOr>  (AND <logicalOr>)*
-<logicalOr>  ::= <comparison> (OR <comparison>)*
-<comparison> ::= <term>  (( GT' | LT' | EQ_EQ | GT_EQ | LT_EQ ) <term> )*
-<term>       ::= <factor> ((PLUS | MINUS) <factor>  )*
-<factor>     ::= <primary> ((TIMES | DIV) <primary> )*
+<logicalAnd> ::= <logicalOr>  ( "&&" <logicalOr>)*
+<logicalOr>  ::= <comparison> ( "||" <comparison>)*
+<comparison> ::= <term>  (( ">" | "<" | "==" | ">=" | "<=" ) <term> )*
+<term>       ::= <factor> (( "+" | "-" ) <factor>  )*
+<factor>     ::= <primary> (( "*" | "/" ) <primary> )*
 <unary>      ::= "-" <unary> | <primary>
-<primary>    ::= TRUE | FALSE | Num | "(" <expr> ")"
+<primary>    ::= "true" | "false" | Num | "(" <expr> ")"
 -}
 
 parse :: [Token] -> Ast
@@ -50,7 +51,6 @@ parse tokens =
 mapFst :: (a -> b) -> (a,c) -> (b, c)
 mapFst f (x, y) = (f x, y)
 
--- TODO: TO BE COMPLETED
 expr :: [Token] -> (Ast, [Token])
 expr =  logicalAnd
 
@@ -62,6 +62,14 @@ logicalAnd tokens =
         (AND:xs) -> mapFst (And ast) $ logicalAnd xs
         _ -> (ast, rest)
 
+-- logicalAnd tokens =  
+--     let 
+--         (ast, rest) = logicalOr tokens
+--     in case rest of
+--         (op@AND:xs) -> mapFst (Binary ast op) $ logicalAnd xs
+--         _ -> (ast, rest)
+
+
 logicalOr :: [Token] -> (Ast, [Token])
 logicalOr tokens =  
     let 
@@ -69,6 +77,15 @@ logicalOr tokens =
     in case rest of
         (OR:xs) -> mapFst (Or ast) $ logicalOr xs
         _ -> (ast, rest)
+
+-- logicalOr :: [Token] -> (Ast, [Token])
+-- logicalOr tokens =  
+--     let 
+--         (ast, rest) = comparison tokens
+--     in case rest of
+--         (op@OR:xs) -> mapFst (Binary ast op) $ logicalOr xs
+--         _ -> (ast, rest)
+
 
 comparison :: [Token] -> (Ast, [Token])
 comparison tokens = 
@@ -81,6 +98,17 @@ comparison tokens =
         (LT_EQ:xs) -> mapFst (LessThanEq    ast) $ comparison xs
         (EQ_EQ:xs) -> mapFst (Equals ast) $ comparison xs
         _ -> (ast, rest)
+
+-- TODO: plans (future c:)
+-- comparison :: [Token] -> (Ast, [Token])
+-- comparison tokens = 
+--     let 
+--         (ast, rest) = term tokens
+--     in case rest of
+--         (op:xs) | op `elem` [
+--                 GT', LT', GT_EQ, LT_EQ, EQ_EQ
+--             ] -> mapFst (Binary ast op) $ comparison xs
+--         _ -> (ast, rest)
 
 term :: [Token] -> (Ast, [Token])
 term tokens = 
