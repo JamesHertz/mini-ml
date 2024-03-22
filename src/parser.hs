@@ -43,8 +43,7 @@ parse tokens =
         (ast, rest) = expr tokens
     in case rest of
         [EOF] -> ast
-        _ -> error "Expression not property ended" -- TODO: improve this...
-
+        _ -> error "Expression not property ended." -- TODO: improve this...
 
 -- Helper function that takes a tuple and a function
 -- and maps the first element of a tuple using the fuction
