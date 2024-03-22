@@ -2,11 +2,16 @@ module TypeChecker (
     Type(..),
     typeCheck
 ) where
-
+-- TODO: improve overall error reporting c:
 import Parser
 
-data Type = IntType | BoolType deriving (Eq, Show)
+data Type = IntType | BoolType deriving (Eq)
 
+instance Show Type where
+    show IntType  = "integer"
+    show BoolType = "boolean"
+
+-- instance Show Type 
 typeCheck :: Ast -> Type
 typeCheck (Number x) = IntType
 typeCheck (Bool x)   = BoolType
@@ -16,6 +21,24 @@ typeCheck (Div left right)  = check (typeCheck left) (typeCheck right) IntType
 typeCheck (Mult left right) = check (typeCheck left) (typeCheck right) IntType
 typeCheck (And left right)  = check (typeCheck left) (typeCheck right) BoolType
 typeCheck (Or left right)   = check (typeCheck left) (typeCheck right) BoolType
+typeCheck (Neg x) = 
+    let 
+        tt = typeCheck x
+    in if tt == IntType then IntType
+       else error $ "Type error: Expected an integer but found a " ++ show tt
+
+typeCheck (Equals left right) = 
+    let 
+        fst = typeCheck left
+        snd = typeCheck right
+    in if fst == snd then BoolType
+       else error $ "Type error: Expected two booleans or two integers but found: " 
+                      ++ show fst ++ " and " ++ show snd 
+
+typeCheck (GreaterThan   left right) = checkComparison (typeCheck left) (typeCheck right)
+typeCheck (LessThan      left right) = checkComparison (typeCheck left) (typeCheck right)
+typeCheck (GreaterThanEq left right) = checkComparison (typeCheck left) (typeCheck right)
+typeCheck (LessThanEq    left right) = checkComparison (typeCheck left) (typeCheck right)
 
 -- TODO: improve this c:
 check :: Type -> Type -> Type -> Type
@@ -23,4 +46,12 @@ check fst snd expected =
     if fst == snd && snd == expected then
         expected
     else
-        error "Type error c:"
+        error $ "Type error: Expected two " ++ show expected 
+                 ++ " but found " ++ show fst ++ " and " ++ show snd
+
+checkComparison :: Type -> Type -> Type
+checkComparison fst snd = 
+    if fst == snd && snd == IntType then
+        BoolType
+    else
+        error $ "Type error: Expected two integers but found: " ++ show fst ++ " and " ++ show snd

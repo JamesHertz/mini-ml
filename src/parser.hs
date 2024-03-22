@@ -5,12 +5,21 @@ module Parser (
 
 import Scanner
 
-data Ast =  Add  Ast Ast 
+data Ast = -- arithmetic
+            Add  Ast Ast 
           | Sub  Ast Ast
           | Mult Ast Ast
+          | Div  Ast Ast
+          | Neg  Ast
+          -- comparison
           | Or   Ast Ast
           | And  Ast Ast
-          | Div  Ast Ast
+          | Equals        Ast Ast
+          | LessThan      Ast Ast
+          | GreaterThan   Ast Ast
+          | LessThanEq    Ast Ast
+          | GreaterThanEq Ast Ast
+          -- values
           | Number Int
           | Bool Bool
          deriving (Eq, Show)
@@ -21,9 +30,10 @@ Context free grammar:
 <expr>       ::= <logicalAnd>
 <logicalAnd> ::= <logicalOr>  (AND <logicalOr>)*
 <logicalOr>  ::= <comparison> (OR <comparison>)*
-<comparison> ::= <term> 
+<comparison> ::= <term>  (( GT' | LT' | EQ_EQ | GT_EQ | LT_EQ ) <term> )*
 <term>       ::= <factor> ((PLUS | MINUS) <factor>  )*
 <factor>     ::= <primary> ((TIMES | DIV) <primary> )*
+<unary>      ::= "-" <unary> | <primary>
 <primary>    ::= TRUE | FALSE | Num | "(" <expr> ")"
 -}
 
@@ -61,9 +71,17 @@ logicalOr tokens =
         (OR:xs) -> mapFst (Or ast) $ logicalOr xs
         _ -> (ast, rest)
 
--- TODO: TO BE COMPLETED
 comparison :: [Token] -> (Ast, [Token])
-comparison = term
+comparison tokens = 
+    let 
+        (ast, rest) = term tokens
+    in case rest of
+        (LT':xs) -> mapFst (LessThan    ast) $ comparison xs
+        (GT':xs) -> mapFst (GreaterThan ast) $ comparison xs
+        (GT_EQ:xs) -> mapFst (GreaterThanEq ast) $ comparison xs
+        (LT_EQ:xs) -> mapFst (LessThanEq    ast) $ comparison xs
+        (EQ_EQ:xs) -> mapFst (Equals ast) $ comparison xs
+        _ -> (ast, rest)
 
 term :: [Token] -> (Ast, [Token])
 term tokens = 
@@ -77,11 +95,15 @@ term tokens =
 factor :: [Token] -> (Ast, [Token])
 factor tokens = 
     let 
-        (ast, rest) = primary tokens
+        (ast, rest) = unary tokens
     in case rest of
         (TIMES:xs) -> mapFst (Mult ast) $ factor xs
         (SLASH:xs) -> mapFst (Div  ast) $ factor xs
         _ -> (ast, rest)
+
+unary :: [Token] -> (Ast, [Token])
+unary (MINUS:xs) = mapFst Neg $ unary xs
+unary xs = primary xs
 
 primary :: [Token] -> (Ast, [Token])
 primary (TRUE:xs)     = (Bool True, xs)
