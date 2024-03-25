@@ -29,7 +29,7 @@ data Ast = -- arithmetic
 Context free grammar:
 <program>    ::=  <expr> EOF
 <expr>       ::= <logicalAnd>
-<logicalAnd> ::= <logicalOr>  ( "&&" <logicalOr>)*
+<logicalAnd> ::= <logicalOr>  ( "&&" <logicalOr> )*
 <logicalOr>  ::= <comparison> ( "||" <comparison>)*
 <comparison> ::= <term>  (( ">" | "<" | "==" | ">=" | "<=" ) <term> )*
 <term>       ::= <factor> (( "+" | "-" ) <factor>  )*

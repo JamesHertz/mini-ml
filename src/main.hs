@@ -2,6 +2,7 @@ import Parser
 import Scanner
 import TypeChecker
 import Interpreter
+import Compiler
 
 import Control.Monad (unless)
 import System.IO (hFlush, stdout)

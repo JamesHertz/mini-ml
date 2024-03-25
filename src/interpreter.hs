@@ -13,10 +13,10 @@ eval (Number x) = IntValue x
 eval (Bool x)   = BoolValue x
 -- arithmetic
 eval (Neg value) = IntValue $ negate . evalInt $ value
-eval (Add  left right) = IntValue  $ evalInt  left + evalInt right
-eval (Sub  left right) = IntValue  $ evalInt  left - evalInt right
-eval (Div  left right) = IntValue  $ evalInt  left `div` evalInt right
-eval (Mult left right) = IntValue  $ evalInt  left * evalInt right
+eval (Add  left right) = IntValue $ evalInt left + evalInt right
+eval (Sub  left right) = IntValue $ evalInt left - evalInt right
+eval (Div  left right) = IntValue $ evalInt left `div` evalInt right
+eval (Mult left right) = IntValue $ evalInt left * evalInt right
 -- comparison
 eval (Equals        left right) = BoolValue $ eval left == eval right
 eval (GreaterThan   left right) = BoolValue $ evalInt left >  evalInt right
