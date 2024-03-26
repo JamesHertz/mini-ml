@@ -3,7 +3,9 @@ module Serializer (
 ) where
 
 import Compiler (Program, Instr(..))
+import Data.List (intercalate)
 
+preamble :: String
 preamble = "\
 \ .class public Demo                                    \n\
 \ .super java/lang/Object                               \n\
@@ -20,9 +22,9 @@ preamble = "\
 \ getstatic java/lang/System/out Ljava/io/PrintStream;  \n\
 \ \n; Your code below c:\n"
 
-
+footer :: String
 footer  = "\
-\; Your code ends here\n\n\
+\ \n; Your code ends here\n\n\
 \ invokestatic java/lang/String/valueOf(I)Ljava/lang/String;     \n\
 \ invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V \n\
 \ return                                                         \n\
@@ -31,4 +33,4 @@ footer  = "\
 serialize :: Program -> String
 serialize p = 
     preamble ++ body ++ footer
-    where body = foldl (\s i -> s ++ show i ++ "\n") "" p
+    where body = intercalate "\n" $ map show p

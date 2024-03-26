@@ -11,7 +11,7 @@ data Instr =
     | IDiv
     | IMul
     | SIpush Int
---  | Label String Instr --> later c:
+--  | Label String
 
 type Program = [Instr]
 
