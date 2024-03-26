@@ -5,62 +5,76 @@ module TypeChecker (
 
 -- TODO: improve overall error reporting c:
 import Parser ( Ast(..) )
+import qualified Data.Map as Map
+import Control.Monad (foldM)
 
 data Type = IntType | BoolType deriving (Eq)
+
+type TypeEnv = Map.Map String Type
+type Result  = Either String
 
 instance Show Type where
     show IntType  = "integer"
     show BoolType = "boolean"
 
--- instance Show Type 
-typeCheck :: Ast -> Type
-typeCheck (Number x) = IntType
-typeCheck (Bool x)   = BoolType
-typeCheck (Add left right)  = check (typeCheck left) (typeCheck right) IntType
-typeCheck (Sub left right)  = check (typeCheck left) (typeCheck right) IntType
-typeCheck (Div left right)  = check (typeCheck left) (typeCheck right) IntType
-typeCheck (Mult left right) = check (typeCheck left) (typeCheck right) IntType
-typeCheck (And left right)  = check (typeCheck left) (typeCheck right) BoolType
-typeCheck (Or left right)   = check (typeCheck left) (typeCheck right) BoolType
-typeCheck (Neg x) = 
-    let 
-        tt = typeCheck x
-    in if tt == IntType then IntType
-       else error $ "Type error: Expected an integer but found a " ++ show tt
+typeCheck :: Ast -> Result Type
+typeCheck ast = typeCheck' ast Map.empty
 
-typeCheck (Equals left right)    =  checkEquals (typeCheck left) (typeCheck right)
-typeCheck (NotEquals left right) =  checkEquals (typeCheck left) (typeCheck right)
+typeCheck' :: Ast -> TypeEnv ->  Result Type
+typeCheck' (Number x) env = Right IntType
+typeCheck' (Bool x)   env = Right BoolType
+typeCheck' (Add  left right)  env = check left right env IntType IntType
+typeCheck' (Sub  left right)  env = check left right env IntType IntType
+typeCheck' (Div  left right)  env = check left right env IntType IntType
+typeCheck' (Mult left right)  env = check left right env IntType IntType
+typeCheck' (And  left right)  env = check left right env BoolType BoolType
+typeCheck' (Or   left right)  env = check left right env BoolType BoolType
 
-typeCheck (GreaterThan   left right) = checkComparison (typeCheck left) (typeCheck right)
-typeCheck (LessThan      left right) = checkComparison (typeCheck left) (typeCheck right)
-typeCheck (GreaterThanEq left right) = checkComparison (typeCheck left) (typeCheck right)
-typeCheck (LessThanEq    left right) = checkComparison (typeCheck left) (typeCheck right)
+typeCheck' (GreaterThan   left right) env = check left right env IntType BoolType
+typeCheck' (LessThan      left right) env = check left right env IntType BoolType
+typeCheck' (GreaterThanEq left right) env = check left right env IntType BoolType
+typeCheck' (LessThanEq    left right) env = check left right env IntType BoolType
 
-typeCheck (Not expr) = 
-    let 
-        exprT =  typeCheck expr
-    in 
-        if exprT == BoolType then BoolType
-        else error $ "Expected a boolean but got a " ++ show exprT
+typeCheck' (Equals left right) env     =  checkEquals left right env
+typeCheck' (NotEquals left right) env  =  checkEquals left right env
 
--- TODO: improve this c:
-check :: Type -> Type -> Type -> Type
-check fst snd expected = 
-    if fst == snd && snd == expected then
-        expected
-    else
-        error $ "Type error: Expected two " ++ show expected 
-                 ++ " but found " ++ show fst ++ " and " ++ show snd
+typeCheck' (Neg  expr) env = do -- TODO: make check more generic so you can use it for this c:
+    exprT <- typeCheck' expr env
+    if exprT == BoolType 
+        then return BoolType
+    else Left $ "Type error: Expected an boolean but found a " ++ show exprT
 
-checkComparison :: Type -> Type -> Type
-checkComparison fst snd = 
-    if fst == snd && snd == IntType then
-        BoolType
-    else
-        error $ "Type error: Expected two integers but found: " ++ show fst ++ " and " ++ show snd
+-- handling identifier c:
+typeCheck' (LetBlock assigns body) env = do
+    newEnv <- foldM mapFunc env assigns
+    typeCheck' body newEnv
+    where 
+        mapFunc map (name, value) =  do
+            tt <- typeCheck' value map
+            return $ Map.insert name tt map
 
-checkEquals :: Type -> Type -> Type
-checkEquals fst snd = 
-    if fst == snd then BoolType
-    else error $ "Type error: Expected two booleans or two integers but found: " 
-                      ++ show fst ++ " and " ++ show snd 
+typeCheck' (Var name) env = 
+    case Map.lookup name env of
+        Just value -> return value
+        Nothing -> Left $ "Undefined identifier: " ++ name
+
+check :: Ast -> Ast -> TypeEnv -> Type -> Type -> Result Type
+check left right env expected result = do
+    left'  <- typeCheck' left  env
+    right' <- typeCheck' right env
+
+    if left' == right' 
+        && right' == expected 
+    then return result
+    else Left $ "Type error: Expected two " ++ show expected ++ "s but found: " 
+                    ++ show left' ++ " and " ++ show right' 
+
+checkEquals :: Ast -> Ast -> TypeEnv -> Result Type
+checkEquals left right env =  do
+    left'  <- typeCheck' left env
+    right' <- typeCheck' right env
+
+    if left' == right' 
+        then return BoolType
+    else Left $ "Type error: Expected two booleans or two integers but found: " 
+                      ++ show left' ++ " and " ++ show right'

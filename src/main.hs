@@ -17,10 +17,13 @@ main =  do
     unless (null line) $ do
         let 
             ast    =  parse $ tokenize line
-            tp     =  typeCheck ast -- look at this c:
-            result =  eval ast 
-        putStrLn $ "Type check OK! (" ++ show tp ++ ")"
-        print result
+            tp     =  typeCheck ast
+        case tp of
+            Left msg -> do
+                putStrLn $ "Error: " ++ msg
+                main
+            _ -> return ()
+        print $ eval ast
         main
 
 prompt :: IO ()

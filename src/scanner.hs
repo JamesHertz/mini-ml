@@ -15,6 +15,7 @@ data Token =
     -- comparison
     | OR
     | AND
+    | EQ'
     | EQ_EQ
     | N_EQ
     | GT'
@@ -26,11 +27,14 @@ data Token =
     -- keywords
     | TRUE
     | FALSE
+    | LET
+    | IN
     -- parenthesis
     | LEFT_PAREN
     | RIGHT_PAREN 
     -- values
     | Num Int
+    | Id String
     -- special c:
     | EOF
  deriving (Eq, Show)
@@ -38,14 +42,16 @@ data Token =
 reserved :: Map.Map String Token
 reserved = Map.fromList [ 
      ("true", TRUE),
-     ("false", FALSE)
+     ("false", FALSE),
+     ("let", LET),
+     ("in", IN)
     ]
 
 keyword :: String -> Token
 keyword word = 
     case Map.lookup word reserved of
             Just token -> token
-            Nothing    -> error $ "Unexpected keyword '" ++ word ++ "'"
+            Nothing    -> Id word
 
 tokenize :: String -> [Token]
 tokenize [] = [EOF] 
@@ -59,6 +65,7 @@ tokenize ('<':'=':xs) = LT_EQ : tokenize xs
 
 tokenize ('>':xs) = GT' : tokenize xs
 tokenize ('<':xs) = LT' : tokenize xs
+tokenize ('=':xs) = EQ'  :  tokenize xs
 
 tokenize ('+':xs) = PLUS  : tokenize xs
 tokenize ('-':xs) = MINUS : tokenize xs

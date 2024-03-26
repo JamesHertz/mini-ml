@@ -1,10 +1,12 @@
 module Parser (
     Ast(..),
-    parse
+    parse,
+    Assigment
 )where
 
 import Scanner ( Token(..) )
 
+type Assigment = (String, Ast)
 data Ast = -- arithmetic
             Add  Ast Ast 
           | Sub  Ast Ast
@@ -21,6 +23,9 @@ data Ast = -- arithmetic
           | LessThanEq    Ast Ast
           | GreaterThanEq Ast Ast
           | NotEquals     Ast Ast
+          | LetBlock      [Assigment] Ast
+          -- unary c:
+          | Var String
         --   | Binary Ast Token Ast -- LATER: plans c:
           -- values
           | Number Int
@@ -34,17 +39,17 @@ Context free grammar:
 <expr>       ::= <logicalAnd>
 <logicalAnd> ::= <logicalOr>  ( "&&" <logicalOr> )*
 <logicalOr>  ::= <comparison> ( "||" <comparison>)*
-<comparison> ::= <term>  (( ">" | "<" | "==" | ">=" | "<=" ) <term> )*
+<comparison> ::= <term>  (( ">" | "<" | "==" | "!=" | ">=" | "<=" ) <term> )*
 <term>       ::= <factor> (( "+" | "-" ) <factor>  )*
 <factor>     ::= <primary> (( "*" | "/" ) <primary> )*
-<unary>      ::= "-" <unary> | <primary>
+<unary>      ::= ("-"|"!") <unary> | <primary>
 <primary>    ::= "true" | "false" | Num | "(" <expr> ")"
 -}
 
 parse :: [Token] -> Ast
 parse tokens = 
     let 
-        (ast, rest) = expr tokens
+        (ast, rest) = decl tokens
     in case rest of
         [EOF] -> ast
         _ -> error "Expression not property ended." -- TODO: improve this...
@@ -53,6 +58,25 @@ parse tokens =
 -- and maps the first element of a tuple using the fuction
 mapFst :: (a -> b) -> (a,c) -> (b, c)
 mapFst f (x, y) = (f x, y)
+
+letAssigments :: [Token] -> ([Assigment], [Token])
+letAssigments ((Id name):EQ':ys) = 
+    let
+        (value, rest) = expr ys
+        assigment = (name, value)
+    in case rest of
+        (IN:ys) -> ([assigment], ys)
+        _  ->  mapFst (assigment:) $ letAssigments rest
+letAssigments (y:_) = error $ "Expected a variable assigment. But found: " ++ show y
+
+-- TODO: fix this later
+decl :: [Token] ->  (Ast, [Token])
+decl (LET:xs) = 
+    let 
+        (assign, rest) = letAssigments xs
+    in mapFst (LetBlock assign) $ decl rest
+decl xs = expr xs
+
 
 expr :: [Token] -> (Ast, [Token])
 expr =  logicalAnd
@@ -138,9 +162,10 @@ unary (BANG:xs)  = mapFst Not $ unary xs
 unary xs = primary xs
 
 primary :: [Token] -> (Ast, [Token])
-primary (TRUE:xs)     = (Bool True, xs)
-primary (FALSE:xs)    = (Bool False, xs)
-primary ((Num nr):xs) = (Number nr, xs)
+primary (TRUE:xs)       = (Bool True, xs)
+primary (FALSE:xs)      = (Bool False, xs)
+primary ((Num nr):xs)   = (Number nr, xs)
+primary ((Id name):xs)  = (Var name, xs)
 primary (LEFT_PAREN:xs) = 
     let
         (ast, rest) = expr xs
@@ -148,3 +173,4 @@ primary (LEFT_PAREN:xs) =
         (RIGHT_PAREN:xs) -> (ast, xs)
         _ -> error "Missing enclosing ')'."
 primary _ = error "Expected an expression."
+-- primary xx = error $ "Expected an expression." ++ show xx
