@@ -12,6 +12,7 @@ data Ast = -- arithmetic
           | Div  Ast Ast
           | Neg  Ast
           -- comparison
+          | Not  Ast
           | Or   Ast Ast
           | And  Ast Ast
           | Equals        Ast Ast
@@ -19,6 +20,7 @@ data Ast = -- arithmetic
           | GreaterThan   Ast Ast
           | LessThanEq    Ast Ast
           | GreaterThanEq Ast Ast
+          | NotEquals     Ast Ast
         --   | Binary Ast Token Ast -- LATER: plans c:
           -- values
           | Number Int
@@ -27,7 +29,8 @@ data Ast = -- arithmetic
 
 {-
 Context free grammar:
-<program>    ::=  <expr> EOF
+<program>    ::=  <decl> EOF
+<decl>       ::= "let" ( ID "=" <expr> )+ "in" <decl> | <expr>
 <expr>       ::= <logicalAnd>
 <logicalAnd> ::= <logicalOr>  ( "&&" <logicalOr> )*
 <logicalOr>  ::= <comparison> ( "||" <comparison>)*
@@ -97,6 +100,7 @@ comparison tokens =
         (GT_EQ:xs) -> mapFst (GreaterThanEq ast) $ comparison xs
         (LT_EQ:xs) -> mapFst (LessThanEq    ast) $ comparison xs
         (EQ_EQ:xs) -> mapFst (Equals ast) $ comparison xs
+        (N_EQ:xs)  -> mapFst (NotEquals ast) $ comparison xs
         _ -> (ast, rest)
 
 -- TODO: plans (future c:)
@@ -130,6 +134,7 @@ factor tokens =
 
 unary :: [Token] -> (Ast, [Token])
 unary (MINUS:xs) = mapFst Neg $ unary xs
+unary (BANG:xs)  = mapFst Not $ unary xs 
 unary xs = primary xs
 
 primary :: [Token] -> (Ast, [Token])

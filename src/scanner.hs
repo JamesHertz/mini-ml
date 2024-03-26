@@ -16,10 +16,13 @@ data Token =
     | OR
     | AND
     | EQ_EQ
+    | N_EQ
     | GT'
     | GT_EQ 
     | LT'
     | LT_EQ 
+    -- single character
+    | BANG
     -- keywords
     | TRUE
     | FALSE
@@ -50,6 +53,7 @@ tokenize [] = [EOF]
 tokenize ('|':'|':xs) = OR    : tokenize xs
 tokenize ('&':'&':xs) = AND   : tokenize xs
 tokenize ('=':'=':xs) = EQ_EQ : tokenize xs
+tokenize ('!':'=':xs) = N_EQ  : tokenize xs
 tokenize ('>':'=':xs) = GT_EQ : tokenize xs
 tokenize ('<':'=':xs) = LT_EQ : tokenize xs
 
@@ -63,6 +67,8 @@ tokenize ('*':xs) = TIMES : tokenize xs
 
 tokenize ('(':xs) = LEFT_PAREN  : tokenize xs
 tokenize (')':xs) = RIGHT_PAREN : tokenize xs
+
+tokenize ('!':xs) = BANG : tokenize xs
 
 tokenize txt@(x:xs) 
     | isSpace x = tokenize $ dropWhile isSpace txt -- skip spaces 

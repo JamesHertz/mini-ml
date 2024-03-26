@@ -11,7 +11,7 @@ data Instr =
     | IDiv
     | IMul
     | SIpush Int
---  | Label String
+    | Label String
 
 type Program = [Instr]
 
@@ -21,6 +21,10 @@ instance Show Instr where
   show IMul = "imul"
   show IDiv = "idiv"
   show (SIpush n) = "sipush " ++ show n
+
+-- type Ctx = Int
+-- makeLabel :: Ctx -> (Ctx, String)
+-- makeLabel ctx =  (ctx+1, "L" ++ show ctx)
 
 compile :: Ast -> Program
 compile (Number n)   = [SIpush n]

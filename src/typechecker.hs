@@ -28,18 +28,20 @@ typeCheck (Neg x) =
     in if tt == IntType then IntType
        else error $ "Type error: Expected an integer but found a " ++ show tt
 
-typeCheck (Equals left right) = 
-    let 
-        fst = typeCheck left
-        snd = typeCheck right
-    in if fst == snd then BoolType
-       else error $ "Type error: Expected two booleans or two integers but found: " 
-                      ++ show fst ++ " and " ++ show snd 
+typeCheck (Equals left right)    =  checkEquals (typeCheck left) (typeCheck right)
+typeCheck (NotEquals left right) =  checkEquals (typeCheck left) (typeCheck right)
 
 typeCheck (GreaterThan   left right) = checkComparison (typeCheck left) (typeCheck right)
 typeCheck (LessThan      left right) = checkComparison (typeCheck left) (typeCheck right)
 typeCheck (GreaterThanEq left right) = checkComparison (typeCheck left) (typeCheck right)
 typeCheck (LessThanEq    left right) = checkComparison (typeCheck left) (typeCheck right)
+
+typeCheck (Not expr) = 
+    let 
+        exprT =  typeCheck expr
+    in 
+        if exprT == BoolType then BoolType
+        else error $ "Expected a boolean but got a " ++ show exprT
 
 -- TODO: improve this c:
 check :: Type -> Type -> Type -> Type
@@ -56,3 +58,9 @@ checkComparison fst snd =
         BoolType
     else
         error $ "Type error: Expected two integers but found: " ++ show fst ++ " and " ++ show snd
+
+checkEquals :: Type -> Type -> Type
+checkEquals fst snd = 
+    if fst == snd then BoolType
+    else error $ "Type error: Expected two booleans or two integers but found: " 
+                      ++ show fst ++ " and " ++ show snd 

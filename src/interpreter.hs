@@ -19,12 +19,14 @@ eval (Div  left right) = IntValue $ evalInt left `div` evalInt right
 eval (Mult left right) = IntValue $ evalInt left * evalInt right
 -- comparison
 eval (Equals        left right) = BoolValue $ eval left == eval right
+eval (NotEquals     left right) = BoolValue $ eval left /= eval right
 eval (GreaterThan   left right) = BoolValue $ evalInt left >  evalInt right
 eval (LessThan      left right) = BoolValue $ evalInt left <  evalInt right
 eval (GreaterThanEq left right) = BoolValue $ evalInt left >= evalInt right
 eval (LessThanEq    left right) = BoolValue $ evalInt left <= evalInt right
 eval (Or   left right) = BoolValue $ evalBool left || evalBool right
 eval (And  left right) = BoolValue $ evalBool left && evalBool right
+eval (Not expr) = BoolValue $ not $ evalBool expr
 
 evalInt :: Ast -> Int 
 evalInt ast = 
