@@ -3,9 +3,11 @@ import Scanner
 import TypeChecker
 import Interpreter
 import Compiler
+import Serializer
 
 import Control.Monad (unless)
 import System.IO (hFlush, stdout)
+
 
 -- TODO: make this better c:
 main :: IO ()
@@ -15,8 +17,8 @@ main =  do
     unless (null line) $ do
         let 
             ast    =  parse $ tokenize line
-            tp     =  typeCheck ast
-            result =  eval ast
+            tp     =  typeCheck ast -- look at this c:
+            result =  eval ast 
         putStrLn $ "Type check OK! (" ++ show tp ++ ")"
         print result
         main
