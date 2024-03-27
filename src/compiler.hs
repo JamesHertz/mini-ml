@@ -23,6 +23,8 @@ data Instr =
     | Goto Label
     | SIpush Int
     | IfIcomp Cond Label
+    | Iconst_1
+    | Iconst_0
     | ILabel Label
 
 instance Show Instr where
@@ -33,6 +35,8 @@ instance Show Instr where
   show IAnd = "iand"
   show IOr  = "ior"
   show INeg = "ineg"
+  show Iconst_0 = "iconst_0"
+  show Iconst_1 = "iconst_1"
   show (ILabel label) = label ++ ":"
   show (Goto label)   = "goto " ++ label 
   show (SIpush n) = "sipush " ++ show n
@@ -82,7 +86,7 @@ compile' (Binary left op right)  = do
 compile' (Unary op value) = do
     value' <- compile' value
     let instr = case op of
-         BANG  -> [INeg]
+         BANG  -> [INeg] -- FIXME: use if and iconsts c: (someday)
          MINUS -> [INeg]
     return $ value' ++ instr
 
@@ -92,10 +96,10 @@ compileCompOperations cond = do
     end   <- genLabel
     return [
       IfIcomp cond start,
-      SIpush 0,
+      Iconst_0,
       Goto end,
       ILabel start,
-      SIpush 1,
+      Iconst_1,
       ILabel end
      ]
 

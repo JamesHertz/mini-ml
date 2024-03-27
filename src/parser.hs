@@ -6,6 +6,7 @@ module Parser (
 )where
 
 import Scanner ( Token(..) )
+import Control.Monad.State (State)
 -- TODO: make this a state monad c:
 
 type Assigment = (String, Ast)
@@ -17,6 +18,8 @@ data Ast =
           | Number Int
           | Bool Bool
          deriving (Eq, Show)
+
+-- type ParserState = State [Token]
 
 {-
 Context free grammar:
