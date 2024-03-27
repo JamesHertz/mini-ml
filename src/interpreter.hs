@@ -4,6 +4,7 @@ module Interpreter (
 )where
 
 import Parser ( Ast(..), Assigment )
+import Scanner (Token(..))
 import qualified Data.Map as Map
 
 type Enviroment = Map.Map String Value
@@ -13,25 +14,45 @@ eval :: Ast -> Value
 eval ast = eval' ast Map.empty
 
 eval' :: Ast -> Enviroment -> Value
+
+--  (Binary left PLUS  right) env = check left right env IntType IntType
+--  (Binary left MINUS right) env = check left right env IntType IntType
+--  (Binary left TIMES right) env = check left right env IntType IntType
+--  (Binary left SLASH right) env = check left right env IntType IntType
+
+-- -- logical operators
+-- typeCheck' (Binary left OR  right) env = check left right env BoolType BoolType
+-- typeCheck' (Binary left AND right) env = check left right env BoolType BoolType
+
+-- -- comparison operatos 
+-- typeCheck' (Binary left  GT'  right) env = check left right env IntType BoolType
+-- typeCheck' (Binary left  LT'  right) env = check left right env IntType BoolType
+-- typeCheck' (Binary left GT_EQ right) env = check left right env IntType BoolType
+-- typeCheck' (Binary left LT_EQ right) env = check left right env IntType BoolType
+
+-- typeCheck' (Binary left EQ_EQ right) env = checkEquals left right env
+-- typeCheck' (Binary left N_EQ right)  env = checkEquals left right env
+
+-- TODO: make check more generic so you can use it for this c:
 -- values
 eval' (Number x) env = IntValue x
 eval' (Bool x)   env = BoolValue x
 -- arithmetic
-eval' (Minus value) env = IntValue $ negate . evalInt value $ env 
-eval' (Add  left right) env = IntValue $ evalInt left env + evalInt right env
-eval' (Sub  left right) env = IntValue $ evalInt left env - evalInt right env
-eval' (Div  left right) env = IntValue $ evalInt left env `div` evalInt right env
-eval' (Mult left right) env = IntValue $ evalInt left env * evalInt right env
+eval' (Unary MINUS value) env = IntValue $ negate . evalInt value $ env 
+eval' (Binary left PLUS  right) env = IntValue $ evalInt left env + evalInt right env
+eval' (Binary left MINUS right) env = IntValue $ evalInt left env - evalInt right env
+eval' (Binary left TIMES right) env = IntValue $ evalInt left env `div` evalInt right env
+eval' (Binary left SLASH right) env = IntValue $ evalInt left env * evalInt right env
 -- comparison
-eval' (Equals        left right) env = BoolValue $ eval' left env == eval' right env
-eval' (NotEquals     left right) env = BoolValue $ eval' left env /= eval' right env
-eval' (GreaterThan   left right) env = BoolValue $ evalInt left env >  evalInt right env
-eval' (LessThan      left right) env = BoolValue $ evalInt left env <  evalInt right env
-eval' (GreaterThanEq left right) env = BoolValue $ evalInt left env >= evalInt right env
-eval' (LessThanEq    left right) env = BoolValue $ evalInt left env <= evalInt right env
-eval' (Or   left right) env = BoolValue $ evalBool left env || evalBool right env
-eval' (And  left right) env = BoolValue $ evalBool left env && evalBool right env
-eval' (Neg expr) env = BoolValue $ not $ evalBool expr env
+eval' (Binary left EQ_EQ right) env = BoolValue $ eval' left env == eval' right env
+eval' (Binary left  N_EQ right) env = BoolValue $ eval' left env /= eval' right env
+eval' (Binary left  GT'  right) env = BoolValue $ evalInt left env >  evalInt right env
+eval' (Binary left  LT'  right) env = BoolValue $ evalInt left env <  evalInt right env
+eval' (Binary left GT_EQ right) env = BoolValue $ evalInt left env >= evalInt right env
+eval' (Binary left LT_EQ right) env = BoolValue $ evalInt left env <= evalInt right env
+eval' (Binary left OR  right) env = BoolValue $ evalBool left env || evalBool right env
+eval' (Binary left AND right) env = BoolValue $ evalBool left env && evalBool right env
+eval' (Unary BANG expr) env = BoolValue $ not $ evalBool expr env
 
 eval' (LetBlock assigns body) env = 
     let

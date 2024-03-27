@@ -64,53 +64,53 @@ compile' (Number n)   = return [SIpush n]
 compile' (Bool value) = return [SIpush $ if value then 1 else 0] 
 
 -- TODO: fix this mess c:
-compile' (Add   left right) = do
-  left'  <- compile' left 
-  right' <- compile' right 
-  return $ left' ++ right' ++ [IAdd]
+-- compile' (Add   left right) = do
+--   left'  <- compile' left 
+--   right' <- compile' right 
+--   return $ left' ++ right' ++ [IAdd]
 
-compile' (Sub left right) = do
-  left'  <- compile' left 
-  right' <- compile' right 
-  return $ left' ++ right' ++ [ISub]
+-- compile' (Sub left right) = do
+--   left'  <- compile' left 
+--   right' <- compile' right 
+--   return $ left' ++ right' ++ [ISub]
 
-compile' (Div left right) = do
-  left'  <- compile' left 
-  right' <- compile' right 
-  return $ left' ++ right' ++ [ISub]
+-- compile' (Div left right) = do
+--   left'  <- compile' left 
+--   right' <- compile' right 
+--   return $ left' ++ right' ++ [ISub]
 
-compile' (Mult left right) = do
-  left'  <- compile' left 
-  right' <- compile' right 
-  return $ left' ++ right' ++ [IMul]
+-- compile' (Mult left right) = do
+--   left'  <- compile' left 
+--   right' <- compile' right 
+--   return $ left' ++ right' ++ [IMul]
 
-compile' (And left right) = do
-  left'  <- compile' left 
-  right' <- compile' right 
-  return $ left' ++ right' ++ [IAnd]
+-- compile' (And left right) = do
+--   left'  <- compile' left 
+--   right' <- compile' right 
+--   return $ left' ++ right' ++ [IAnd]
 
-compile' (Or left right) = do
-  left'  <- compile' left 
-  right' <- compile' right 
-  return $ left' ++ right' ++ [IOr]
+-- compile' (Or left right) = do
+--   left'  <- compile' left 
+--   right' <- compile' right 
+--   return $ left' ++ right' ++ [IOr]
 
-compile' (Neg value ) = do
-  value' <- compile' value
-  return $ value' ++ [INeg]
+-- compile' (Neg value ) = do
+--   value' <- compile' value
+--   return $ value' ++ [INeg]
 
-compile' (Equals left right) = do
-  left'  <- compile' left 
-  right' <- compile' right 
-  start <- genLabel
-  end   <- genLabel
-  return $ left' ++ right' ++ [
-     IfIcomp CEQ start,
-     SIpush 0,
-     Goto end,
-     ILabel start,
-     SIpush 1,
-     ILabel end
-   ]
+-- compile' (Equals left right) = do
+--   left'  <- compile' left 
+--   right' <- compile' right 
+--   start <- genLabel
+--   end   <- genLabel
+--   return $ left' ++ right' ++ [
+--      IfIcomp CEQ start,
+--      SIpush 0,
+--      Goto end,
+--      ILabel start,
+--      SIpush 1,
+--      ILabel end
+--    ]
 
 genLabel :: CompilerState Label
 genLabel = do

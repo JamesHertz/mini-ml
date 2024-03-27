@@ -5,6 +5,7 @@ module TypeChecker (
 
 -- TODO: improve overall error reporting c:
 import Parser ( Ast(..) )
+import Scanner (Token(..))
 import qualified Data.Map as Map
 import Control.Monad (foldM)
 import Errors ( Result )
@@ -24,25 +25,29 @@ typeCheck ast = typeCheck' ast Map.empty
 typeCheck' :: Ast -> TypeEnv ->  Result Type
 typeCheck' (Number x) env = Right IntType
 typeCheck' (Bool x)   env = Right BoolType
-typeCheck' (Minus x)  env = checkValue x env IntType
+typeCheck' (Unary MINUS x)  env = checkValue x env IntType
 
-typeCheck' (Add  left right)  env = check left right env IntType IntType
-typeCheck' (Sub  left right)  env = check left right env IntType IntType
-typeCheck' (Div  left right)  env = check left right env IntType IntType
-typeCheck' (Mult left right)  env = check left right env IntType IntType
-typeCheck' (And  left right)  env = check left right env BoolType BoolType
-typeCheck' (Or   left right)  env = check left right env BoolType BoolType
+-- arithemetic operators
+typeCheck' (Binary left PLUS  right) env = check left right env IntType IntType
+typeCheck' (Binary left MINUS right) env = check left right env IntType IntType
+typeCheck' (Binary left TIMES right) env = check left right env IntType IntType
+typeCheck' (Binary left SLASH right) env = check left right env IntType IntType
 
-typeCheck' (GreaterThan   left right) env = check left right env IntType BoolType
-typeCheck' (LessThan      left right) env = check left right env IntType BoolType
-typeCheck' (GreaterThanEq left right) env = check left right env IntType BoolType
-typeCheck' (LessThanEq    left right) env = check left right env IntType BoolType
+-- logical operators
+typeCheck' (Binary left AND right) env = check left right env BoolType BoolType
+typeCheck' (Binary left OR  right) env = check left right env BoolType BoolType
 
-typeCheck' (Equals left right) env     =  checkEquals left right env
-typeCheck' (NotEquals left right) env  =  checkEquals left right env
+-- comparison operatos 
+typeCheck' (Binary left  GT'  right) env = check left right env IntType BoolType
+typeCheck' (Binary left  LT'  right) env = check left right env IntType BoolType
+typeCheck' (Binary left GT_EQ right) env = check left right env IntType BoolType
+typeCheck' (Binary left LT_EQ right) env = check left right env IntType BoolType
+
+typeCheck' (Binary left EQ_EQ right) env = checkEquals left right env
+typeCheck' (Binary left N_EQ right)  env = checkEquals left right env
 
 -- TODO: make check more generic so you can use it for this c:
-typeCheck' (Neg  expr) env = checkValue expr env BoolType 
+typeCheck' (Unary BANG expr) env = checkValue expr env BoolType 
 
 -- handling identifier c:
 typeCheck' (LetBlock assigns body) env = do
