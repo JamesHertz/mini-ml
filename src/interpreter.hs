@@ -17,7 +17,7 @@ eval' :: Ast -> Enviroment -> Value
 eval' (Number x) env = IntValue x
 eval' (Bool x)   env = BoolValue x
 -- arithmetic
-eval' (Neg value) env = IntValue $ negate . evalInt value $ env 
+eval' (Minus value) env = IntValue $ negate . evalInt value $ env 
 eval' (Add  left right) env = IntValue $ evalInt left env + evalInt right env
 eval' (Sub  left right) env = IntValue $ evalInt left env - evalInt right env
 eval' (Div  left right) env = IntValue $ evalInt left env `div` evalInt right env
@@ -31,7 +31,7 @@ eval' (GreaterThanEq left right) env = BoolValue $ evalInt left env >= evalInt r
 eval' (LessThanEq    left right) env = BoolValue $ evalInt left env <= evalInt right env
 eval' (Or   left right) env = BoolValue $ evalBool left env || evalBool right env
 eval' (And  left right) env = BoolValue $ evalBool left env && evalBool right env
-eval' (Not expr) env = BoolValue $ not $ evalBool expr env
+eval' (Neg expr) env = BoolValue $ not $ evalBool expr env
 
 eval' (LetBlock assigns body) env = 
     let

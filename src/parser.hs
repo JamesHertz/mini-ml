@@ -12,9 +12,9 @@ data Ast = -- arithmetic
           | Sub  Ast Ast
           | Mult Ast Ast
           | Div  Ast Ast
-          | Neg  Ast
+          | Minus  Ast
           -- comparison
-          | Not  Ast
+          | Neg  Ast
           | Or   Ast Ast
           | And  Ast Ast
           | Equals        Ast Ast
@@ -157,8 +157,8 @@ factor tokens =
         _ -> (ast, rest)
 
 unary :: [Token] -> (Ast, [Token])
-unary (MINUS:xs) = mapFst Neg $ unary xs
-unary (BANG:xs)  = mapFst Not $ unary xs 
+unary (MINUS:xs) = mapFst Minus $ unary xs
+unary (BANG:xs)  = mapFst Neg $ unary xs 
 unary xs = primary xs
 
 primary :: [Token] -> (Ast, [Token])

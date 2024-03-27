@@ -7,11 +7,12 @@ module TypeChecker (
 import Parser ( Ast(..) )
 import qualified Data.Map as Map
 import Control.Monad (foldM)
+import Errors ( Result )
 
 data Type = IntType | BoolType deriving (Eq)
 
 type TypeEnv = Map.Map String Type
-type Result  = Either String
+-- type Result  = Either String
 
 instance Show Type where
     show IntType  = "integer"
@@ -23,6 +24,8 @@ typeCheck ast = typeCheck' ast Map.empty
 typeCheck' :: Ast -> TypeEnv ->  Result Type
 typeCheck' (Number x) env = Right IntType
 typeCheck' (Bool x)   env = Right BoolType
+typeCheck' (Minus x)  env = checkValue x env IntType
+
 typeCheck' (Add  left right)  env = check left right env IntType IntType
 typeCheck' (Sub  left right)  env = check left right env IntType IntType
 typeCheck' (Div  left right)  env = check left right env IntType IntType
@@ -38,11 +41,8 @@ typeCheck' (LessThanEq    left right) env = check left right env IntType BoolTyp
 typeCheck' (Equals left right) env     =  checkEquals left right env
 typeCheck' (NotEquals left right) env  =  checkEquals left right env
 
-typeCheck' (Neg  expr) env = do -- TODO: make check more generic so you can use it for this c:
-    exprT <- typeCheck' expr env
-    if exprT == BoolType 
-        then return BoolType
-    else Left $ "Type error: Expected an boolean but found a " ++ show exprT
+-- TODO: make check more generic so you can use it for this c:
+typeCheck' (Neg  expr) env = checkValue expr env BoolType 
 
 -- handling identifier c:
 typeCheck' (LetBlock assigns body) env = do
@@ -58,6 +58,7 @@ typeCheck' (Var name) env =
         Just value -> return value
         Nothing -> Left $ "Undefined identifier: " ++ name
 
+-- Helper function c:
 check :: Ast -> Ast -> TypeEnv -> Type -> Type -> Result Type
 check left right env expected result = do
     left'  <- typeCheck' left  env
@@ -68,6 +69,13 @@ check left right env expected result = do
     then return result
     else Left $ "Type error: Expected two " ++ show expected ++ "s but found: " 
                     ++ show left' ++ " and " ++ show right' 
+
+checkValue :: Ast -> TypeEnv -> Type -> Result Type -- TODO: finish this
+checkValue ast env expected = do
+    exprT <- typeCheck' ast env
+    if exprT == expected 
+        then return expected
+    else Left $ "Type error: Expected an " ++ show expected ++ " but found a " ++ show exprT
 
 checkEquals :: Ast -> Ast -> TypeEnv -> Result Type
 checkEquals left right env =  do

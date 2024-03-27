@@ -5,6 +5,8 @@ module Scanner (
 ) where
 import qualified Data.Map as Map
 import Data.Char (isDigit, isAlpha, isAlphaNum, isSpace)
+import Errors (Result)
+import Text.Parsec (token)
 
 data Token = 
     -- arithmetic
@@ -55,7 +57,6 @@ keyword word =
 
 tokenize :: String -> [Token]
 tokenize [] = [EOF] 
-
 tokenize ('|':'|':xs) = OR    : tokenize xs
 tokenize ('&':'&':xs) = AND   : tokenize xs
 tokenize ('=':'=':xs) = EQ_EQ : tokenize xs
