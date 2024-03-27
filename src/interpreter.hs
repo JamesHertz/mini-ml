@@ -7,7 +7,10 @@ import Parser ( Ast(..), Token(..), Assigment  )
 import qualified Data.Map as Map
 
 type Enviroment = Map.Map String Value
-data Value = IntValue Int | BoolValue Bool deriving (Eq, Show)
+data Value = IntValue Int | BoolValue Bool deriving (Eq)
+instance Show Value where
+    show (IntValue  x) = show x
+    show (BoolValue x) = show x
 
 eval :: Ast -> Value
 eval ast = eval' ast Map.empty
