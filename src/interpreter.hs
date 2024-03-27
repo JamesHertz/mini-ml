@@ -3,8 +3,7 @@ module Interpreter (
     eval,
 )where
 
-import Parser ( Ast(..), Assigment )
-import Scanner (Token(..))
+import Parser ( Ast(..), Token(..), Assigment  )
 import qualified Data.Map as Map
 
 type Enviroment = Map.Map String Value
@@ -14,24 +13,6 @@ eval :: Ast -> Value
 eval ast = eval' ast Map.empty
 
 eval' :: Ast -> Enviroment -> Value
-
---  (Binary left PLUS  right) env = check left right env IntType IntType
---  (Binary left MINUS right) env = check left right env IntType IntType
---  (Binary left TIMES right) env = check left right env IntType IntType
---  (Binary left SLASH right) env = check left right env IntType IntType
-
--- -- logical operators
--- typeCheck' (Binary left OR  right) env = check left right env BoolType BoolType
--- typeCheck' (Binary left AND right) env = check left right env BoolType BoolType
-
--- -- comparison operatos 
--- typeCheck' (Binary left  GT'  right) env = check left right env IntType BoolType
--- typeCheck' (Binary left  LT'  right) env = check left right env IntType BoolType
--- typeCheck' (Binary left GT_EQ right) env = check left right env IntType BoolType
--- typeCheck' (Binary left LT_EQ right) env = check left right env IntType BoolType
-
--- typeCheck' (Binary left EQ_EQ right) env = checkEquals left right env
--- typeCheck' (Binary left N_EQ right)  env = checkEquals left right env
 
 -- TODO: make check more generic so you can use it for this c:
 -- values

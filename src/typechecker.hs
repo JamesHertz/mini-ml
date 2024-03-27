@@ -4,8 +4,7 @@ module TypeChecker (
 ) where
 
 -- TODO: improve overall error reporting c:
-import Parser ( Ast(..) )
-import Scanner (Token(..))
+import Parser ( Ast(..), Token(..) )
 import qualified Data.Map as Map
 import Control.Monad (foldM)
 import Errors ( Result )

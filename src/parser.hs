@@ -1,5 +1,6 @@
 module Parser (
     Ast(..),
+    Token(..),
     parse,
     Assigment
 )where
@@ -8,28 +9,11 @@ import Scanner ( Token(..) )
 -- TODO: make this a state monad c:
 
 type Assigment = (String, Ast)
-data Ast = -- arithmetic
-        --     Add  Ast Ast 
-        --   | Sub  Ast Ast
-        --   | Mult Ast Ast
-        --   | Div  Ast Ast
-        --   | Minus  Ast
-        --   -- comparison
-        --   | Neg  Ast
-        --   | Or   Ast Ast
-        --   | And  Ast Ast
-        --   | Equals        Ast Ast
-        --   | LessThan      Ast Ast
-        --   | GreaterThan   Ast Ast
-        --   | LessThanEq    Ast Ast
-        --   | GreaterThanEq Ast Ast
-        --   | NotEquals     Ast Ast
-            Binary Ast Token Ast -- LATER: plans c:
-          | Unary Token Ast -- LATER: plans c:
-          | LetBlock      [Assigment] Ast
-          -- unary c:
+data Ast = 
+            Binary Ast Token Ast
+          | Unary  Token Ast 
+          | LetBlock [Assigment] Ast
           | Var String
-          -- values
           | Number Int
           | Bool Bool
          deriving (Eq, Show)
@@ -54,7 +38,7 @@ parse tokens =
         (ast, rest) = decl tokens
     in case rest of
         [EOF] -> ast
-        _ -> error "Expression not property ended." -- TODO: improve this...
+        xs -> error $ "Expression not property ended: " ++ show xs -- TODO: improve this...
 
 -- Helper function that takes a tuple and a function
 -- and maps the first element of a tuple using the fuction
@@ -79,17 +63,8 @@ decl (LET:xs) =
     in mapFst (LetBlock assign) $ decl rest
 decl xs = expr xs
 
-
 expr :: [Token] -> (Ast, [Token])
 expr =  logicalAnd
-
--- logicalAnd :: [Token] -> (Ast, [Token])
--- logicalAnd tokens =  
---     let 
---         (ast, rest) = logicalOr tokens
---     in case rest of
---         (AND:xs) -> mapFst (And ast) $ logicalAnd xs
---         _ -> (ast, rest)
 
 logicalAnd :: [Token] -> (Ast, [Token])
 logicalAnd tokens =  
@@ -99,15 +74,6 @@ logicalAnd tokens =
         (op@AND:xs) -> mapFst (Binary ast op) $ logicalAnd xs
         _ -> (ast, rest)
 
-
--- logicalOr :: [Token] -> (Ast, [Token])
--- logicalOr tokens =  
---     let 
---         (ast, rest) = comparison tokens
---     in case rest of
---         (OR:xs) -> mapFst (Or ast) $ logicalOr xs
---         _ -> (ast, rest)
-
 logicalOr :: [Token] -> (Ast, [Token])
 logicalOr tokens =  
     let 
@@ -116,20 +82,6 @@ logicalOr tokens =
         (op@OR:xs) -> mapFst (Binary ast op) $ logicalOr xs
         _ -> (ast, rest)
 
-
--- comparison :: [Token] -> (Ast, [Token])
--- comparison tokens = 
---     let 
---         (ast, rest) = term tokens
---     in case rest of
---         (LT':xs) -> mapFst (LessThan    ast) $ comparison xs
---         (GT':xs) -> mapFst (GreaterThan ast) $ comparison xs
---         (GT_EQ:xs) -> mapFst (GreaterThanEq ast) $ comparison xs
---         (LT_EQ:xs) -> mapFst (LessThanEq    ast) $ comparison xs
---         (EQ_EQ:xs) -> mapFst (Equals ast) $ comparison xs
---         (N_EQ:xs)  -> mapFst (NotEquals ast) $ comparison xs
---         _ -> (ast, rest)
-
 -- TODO: plans (future c:)
 comparison :: [Token] -> (Ast, [Token])
 comparison tokens = 
@@ -137,7 +89,7 @@ comparison tokens =
         (ast, rest) = term tokens
     in case rest of
         (op:xs) | op `elem` [
-                GT', LT', GT_EQ, LT_EQ, EQ_EQ
+                GT', LT', GT_EQ, LT_EQ, EQ_EQ, N_EQ
             ] -> mapFst (Binary ast op) $ comparison xs
         _ -> (ast, rest)
 

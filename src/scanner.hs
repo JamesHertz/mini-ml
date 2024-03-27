@@ -39,10 +39,10 @@ data Token =
     | Id String
     -- special c:
     | EOF
- deriving (Eq, Show)
+ deriving (Eq, Show, Ord)
 
-reserved :: Map.Map String Token
-reserved = Map.fromList [ 
+reservedKeywors :: Map.Map String Token
+reservedKeywors = Map.fromList [ 
      ("true", TRUE),
      ("false", FALSE),
      ("let", LET),
@@ -51,7 +51,7 @@ reserved = Map.fromList [
 
 keyword :: String -> Token
 keyword word = 
-    case Map.lookup word reserved of
+    case Map.lookup word reservedKeywors of
             Just token -> token
             Nothing    -> Id word
 
@@ -66,7 +66,7 @@ tokenize ('<':'=':xs) = LT_EQ : tokenize xs
 
 tokenize ('>':xs) = GT' : tokenize xs
 tokenize ('<':xs) = LT' : tokenize xs
-tokenize ('=':xs) = EQ'  :  tokenize xs
+tokenize ('=':xs) = EQ' : tokenize xs
 
 tokenize ('+':xs) = PLUS  : tokenize xs
 tokenize ('-':xs) = MINUS : tokenize xs
