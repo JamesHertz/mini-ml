@@ -7,7 +7,7 @@ module Compiler(
 ) where
 
 import Parser (Ast(..), Token(..))
-import TypeChecker (Type(..))
+import TypeChecker (Type(..), typeCheck)
 import Control.Monad.State (State, evalState, gets, put)
 
 -- helper types
@@ -65,7 +65,12 @@ type Program = [Instr]
 
 compile :: Ast -> Program
 compile ast =
-    evalState (compile' ast) 0
+    let 
+        typ = case typeCheck ast of
+                Left msg -> error $ "Error: " ++ msg
+                Right t  -> t
+        program = evalState (compile' ast) 0
+    in  program ++ [Print typ]
 
 compile' :: Ast -> CompilerState Program
 compile' (Number n)   = return [SIpush n]

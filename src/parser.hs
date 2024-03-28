@@ -66,7 +66,7 @@ decl = do
     case token of
         Just t -> do
             assigns <- letAssigments
-            LetBlock assigns <$> expr
+            LetBlock assigns <$> decl
         _ -> expr
 
 expr :: ParserState Ast

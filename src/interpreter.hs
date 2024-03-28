@@ -25,8 +25,8 @@ eval' (Bool x)   env = BoolValue x
 eval' (Unary MINUS value) env = IntValue $ negate . evalInt value $ env 
 eval' (Binary left PLUS  right) env = IntValue $ evalInt left env + evalInt right env
 eval' (Binary left MINUS right) env = IntValue $ evalInt left env - evalInt right env
-eval' (Binary left TIMES right) env = IntValue $ evalInt left env `div` evalInt right env
-eval' (Binary left SLASH right) env = IntValue $ evalInt left env * evalInt right env
+eval' (Binary left SLASH right) env = IntValue $ evalInt left env `div` evalInt right env
+eval' (Binary left TIMES right) env = IntValue $ evalInt left env * evalInt right env
 -- comparison
 eval' (Binary left EQ_EQ right) env = BoolValue $ eval' left env == eval' right env
 eval' (Binary left  N_EQ right) env = BoolValue $ eval' left env /= eval' right env
