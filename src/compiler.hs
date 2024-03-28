@@ -70,9 +70,9 @@ compile' (Binary left op right)  = do
   right' <- compile' right 
   instr  <- case op of
       PLUS  -> return [IAdd]
-      MINUS -> return [IAdd]
-      TIMES -> return [IAdd]
-      SLASH -> return [IAdd]
+      MINUS -> return [ISub]
+      TIMES -> return [IMul]
+      SLASH -> return [IDiv]
       OR    -> return [IOr]
       AND   -> return [IAnd]
       EQ_EQ -> compileCompOperations CEQ
