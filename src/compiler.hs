@@ -7,6 +7,7 @@ module Compiler(
 ) where
 
 import Parser (Ast(..), Token(..))
+import TypeChecker (Type(..))
 import Control.Monad.State (State, evalState, gets, put)
 
 -- helper types
@@ -26,6 +27,7 @@ data Instr =
     | Iconst_1
     | Iconst_0
     | ILabel Label
+    | Print Type
 
 instance Show Instr where
   show IAdd = "iadd"
@@ -41,6 +43,10 @@ instance Show Instr where
   show (Goto label)   = "goto " ++ label 
   show (SIpush n) = "sipush " ++ show n
   show (IfIcomp cond label) = "if_icmp" ++ show cond ++ " " ++ label
+
+ -- FIXME: delete this later
+  show (Print IntType)   = "invokevirtual java/io/PrintStream/println(I)V"
+  show (Print BoolType ) = "invokevirtual java/io/PrintStream/println(Z)V"
 
 data Cond  = CEQ | CNE | CLT | CGT | CLE | CGE
 

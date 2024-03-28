@@ -25,8 +25,8 @@ preamble = "\
 footer :: String
 footer  = "\
 \ \n; Your code ends here\n\n\
-\ invokestatic java/lang/String/valueOf(I)Ljava/lang/String;     \n\
-\ invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V \n\
+\ ; invokestatic java/lang/String/valueOf(I)Ljava/lang/String;     \n\
+\ ; invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V \n\
 \ return                                                         \n\
 \ .end method"
 

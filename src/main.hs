@@ -34,13 +34,13 @@ compileFile filename =
         let 
             ast      = parse $ tokenize contents
             program  = compile ast
-        case typeCheck ast of
-            Left msg -> error $ "Error: " ++ msg 
-            _ -> return ()
+            program' =  case typeCheck ast of
+                            Left  msg   -> error $ "Error: " ++ msg 
+                            Right typ   -> program ++ [Print typ]
 
         (name, handler) <- openTempFile "/tmp" "tmp.asm"
 
-        hPutStr handler $ serialize program
+        hPutStr handler $ serialize program'
         hFlush handler
         hClose handler
 
