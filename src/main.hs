@@ -33,7 +33,7 @@ compileFile filename =
         contents <- readFile filename 
         let 
             ast      = parse $ tokenize contents
-            program  = compile ast
+            program  =  compile ast
 
         (name, handler) <- openTempFile "/tmp" "tmp.jasm"
         hPutStr handler $ serialize program

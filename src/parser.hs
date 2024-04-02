@@ -24,7 +24,7 @@ type ParserState = State [Token]
 {-
 Context free grammar:
 <program>    ::=  <decl> EOF
-<decl>       ::= "let" ( ID "=" <expr> )+ "in" <decl> | <expr>
+<decl>       ::= "let" ( Id (":"Id)? "=" <expr> )+ "in" <decl> | <expr>
 <expr>       ::= <logicalAnd>
 <logicalAnd> ::= <logicalOr>  ( "&&" <logicalOr> )*
 <logicalOr>  ::= <comparison> ( "||" <comparison>)*
@@ -32,7 +32,7 @@ Context free grammar:
 <term>       ::= <factor> (( "+" | "-" ) <factor>  )*
 <factor>     ::= <primary> (( "*" | "/" ) <primary> )*
 <unary>      ::= ("-"|"!") <unary> | <primary>
-<primary>    ::= "true" | "false" | Num | "(" <expr> ")"
+<primary>    ::= "true" | "false" | Num | "(" <expr> ")" | Id
 -}
 
 -- the real thing
@@ -46,18 +46,18 @@ parse tokens =
 
 letAssigments :: ParserState [Assigment]
 letAssigments = do
-    token <- takeToken 
-    case token of
-        (Id name) ->  do
-            consume EQ' "Expected '=' after variable name."
-            value <- expr
-            token <- match [IN]
-            let assign = (name, value)
-            if isNothing token then
-                (assign:) <$> letAssigments
-            else 
-                return [assign]
-        t -> error $ "Expected and indentifier but got: " ++ show t
+    token <- consume (Id "") "Expected and indentifier after 'let' keyword."
+    consume EQ' "Expected '=' after variable name."
+    value <- expr
+
+    let 
+        (Id name) = token
+        assign    = (name, value)
+    inToken <- match [IN]
+    if isNothing inToken then
+        (assign:) <$> letAssigments
+    else 
+        return [assign]
 
 -- decl = match [LET] >>= maybe expr (\_ -> return (Bool True)) -- TODO: think about this 
 decl :: ParserState Ast
@@ -138,24 +138,25 @@ primary = do
 match :: [Token] -> ParserState (Maybe Token)
 match expected = do
     tokens <- get
-    case tokens of -- TODO: think about Id, Num ...
+    case tokens of
         (x:xs) | x `elem` expected -> put xs >> return (Just x)
         _ -> return Nothing
 
 type Message = String
-consume :: Token -> Message -> ParserState ()
+consume :: Token -> Message -> ParserState Token
 consume expected msg = do
     t <- match [expected]
     case t of
-        Just _  -> return ()
-        Nothing -> error msg
+        Just t'  -> return t'
+        Nothing  -> error msg
     
+-- TODO: think about this c:
 takeToken :: ParserState Token
 takeToken = do
     tokens <- get
-    case tokens of
-        (x:xs) -> put xs >> return x
-        _ -> error "Empty tokens list :c"
+    let (head:tail) = tokens
+    put tail
+    return head
 
 
 -- -- OLD parser: FIXME: delete this someday

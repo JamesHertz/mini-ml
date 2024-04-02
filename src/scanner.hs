@@ -39,7 +39,45 @@ data Token =
     | Id String
     -- special c:
     | EOF
- deriving (Eq, Show, Ord)
+ deriving (Show, Ord)
+
+
+
+instance Eq Token where
+    -- I needed the two definition below, because of the consume
+    -- function defined at 'parser.hs' so I had to define Eq by hand c:
+    Num _ == Num _ = True
+    Id  _ == Id _  = True
+
+    PLUS  == PLUS  = True 
+    MINUS == MINUS = True
+    SLASH == SLASH = True
+    TIMES == TIMES = True
+
+    OR  == OR  = True
+    AND == AND = True
+    EQ' == EQ' = True
+    GT' == GT' = True
+    LT' == LT' = True
+
+    EQ_EQ == EQ_EQ = True
+    N_EQ  == N_EQ  = True
+    GT_EQ == GT_EQ = True 
+    LT_EQ == LT_EQ = True 
+    BANG  == BANG  = True
+
+    TRUE  == TRUE  = True
+    FALSE == FALSE = True
+
+    LEFT_PAREN  == LEFT_PAREN = True
+    RIGHT_PAREN == RIGHT_PAREN = True 
+
+    LET == LET = True
+    IN  == IN = True
+    EOF == EOF = True
+
+    _ == _ = False
+
 
 reservedKeywors :: Map.Map String Token
 reservedKeywors = Map.fromList [ 
