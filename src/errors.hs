@@ -1,13 +1,14 @@
 module Errors(
     Result,
-    -- Error(..)
+    Error(..),
+    ErrType(..),
 ) where
 
 import Control.Monad.State (State)
 -- look at this c:
-data ErrType = SyntaxError | TypingError
+data ErrType = SyntaxError | TypingError deriving(Show)
 
-data Error = Error { errType :: ErrType, message :: String, line :: Int, position :: Int }
+data Error = Error { errType :: ErrType, message :: String, line :: Int, position :: Int } deriving(Show)
 -- data Error = SyntaxError String | TypingError String
 
 type Result = Either Error-- TODO: fix this later c:

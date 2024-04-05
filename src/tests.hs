@@ -2,9 +2,11 @@ module Tests where
 
 import qualified Data.Map as Map
 import Data.Char (isDigit, isAlpha, isAlphaNum, isSpace)
-import Control.Monad.State (State, evalState, get, modify, put, gets)
+import Control.Monad.State (State, evalState, get, modify, put, gets, MonadTrans (lift))
 import Errors
 import Data.Maybe (fromMaybe)
+import Control.Monad.Except (ExceptT, runExceptT)
+import Control.Monad.Trans.Except (throwE)
 
 data TokenValue = 
     -- arithmetic
@@ -96,10 +98,11 @@ data Context = Context {
     currPosition :: Int
   }
 
-type ScannerState = State Context
+-- type ScannerState = State Context
+type ScannerState = ExceptT Error (State Context)
 
-tokenize :: String -> [Token]
-tokenize src = evalState tokenize' $ Context src 1 (-1)
+tokenize :: String -> Result [Token]
+tokenize src = evalState (runExceptT tokenize') $ Context src 1 (-1)
 
 tokenize' :: ScannerState [Token]
 tokenize' = do
@@ -123,7 +126,7 @@ tokenize' = do
                    ')' -> return RIGHT_PAREN
 
                    -- comparison
-                   '>' -> match '=' GT_EQ GT'
+                   '>' -> match '=' GT_EQ GT' 
                    '<' -> match '=' LT_EQ LT'
                    '=' -> match '=' EQ_EQ EQ'
                    '!' -> match '=' N_EQ BANG
@@ -133,9 +136,8 @@ tokenize' = do
 
                    x | isAlpha x -> join x >>= identifier 
                    x | isDigit x -> join x >>= number
-                   _   -> error $ "Unexpected symbol: " ++ [char]
-
-        token <- makeToken value
+                   _   -> makeError $ "Unexpected symbol: " ++ [char]
+        token <- makeToken value 
         rest  <- tokenize'
         return $ token : rest
         where
@@ -169,7 +171,7 @@ consume :: Char -> TokenValue -> ScannerState TokenValue
 consume expected result = do
   res <- match expected True False
   if res then return result
-  else error $ "Error: expected " ++ [expected]
+  else makeError $ "Expected a '" ++ [expected] ++ "'."
 
 skipSpaces :: ScannerState ()
 skipSpaces = do
@@ -198,6 +200,12 @@ identifier txt = do
   updateCtx rest 0 positions
   return value
 
+-- why don't I need a lift??
 updateCtx :: String -> Int -> Int -> ScannerState ()
 updateCtx newSource lineDiff posDiff = 
     modify $ \(Context source line pos) -> Context newSource (line + lineDiff) (pos + posDiff)
+
+makeError :: String -> ScannerState a
+makeError msg = do
+  ctx <- get
+  throwE $ Error SyntaxError msg (currLine ctx) (currPosition ctx)
