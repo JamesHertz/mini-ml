@@ -14,6 +14,7 @@ data Type = IntType | BoolType deriving (Eq)
 type TypeEnv = Map.Map String Type
 -- type Result  = Either String
 
+
 instance Show Type where
     show IntType  = "integer"
     show BoolType = "boolean"

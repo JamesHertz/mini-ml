@@ -3,9 +3,11 @@ module Errors(
     -- Error(..)
 ) where
 
-type Result = Either Error-- TODO: fix this later c:
-
+-- look at this c:
 data Error = SyntaxError String | TypingError String
+
+type Result = Either String-- TODO: fix this later c:
+
 
 {-
 

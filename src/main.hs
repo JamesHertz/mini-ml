@@ -54,19 +54,18 @@ compileFile filename =
 runInterpreter :: IO ()
 runInterpreter = do
     prompt
-    line <- getLine
-    unless (null line) $ do
-        let 
-            ast    =  parse $ tokenize line
-            tp     =  typeCheck ast
-        case tp of
-            Left msg -> do
-                putStrLn $ "Error: " ++ msg
-                runInterpreter
-            _ -> return ()
-        print $ eval ast
-        runInterpreter
-
+    txt <- getContents
+    mapM_ interpret $ lines txt
+    where
+        interpret line = do
+            let 
+                ast    =  parse $ tokenize line
+                tp     =  typeCheck ast
+            case tp of
+                Left msg -> do
+                    putStrLn $ "Error: " ++ msg
+                _ -> print $ eval ast
+            prompt
 
 -- FIXME: later c:
 printError :: String -> IO a

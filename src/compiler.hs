@@ -27,7 +27,7 @@ data Instr =
     | Iconst_1
     | Iconst_0
     | ILabel Label
-    | Print Type
+    | Print Type 
 
 instance Show Instr where
   show IAdd = "iadd"

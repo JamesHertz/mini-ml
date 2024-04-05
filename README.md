@@ -8,9 +8,9 @@ To build you will need to have `ghc` (haskell compiler) installed. After making 
 For the first time you might want to run `./bin/main --help` go get a feel of how it works. That's it c;
 
 # TODOs:
-- [ ] Add support for types on variable declarations
 - [ ] Figure a way to handle and report errors
 - [ ] Write a set of tests
+- [ ] Add support for types on variable declarations
 - [ ] Rename some tokens to improve code readability
 - [ ] Look for better ways to design your CLI interface c:
 - [ ] Think about storing information about places on the tokens (probaby coming up with a token type c:)
