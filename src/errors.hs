@@ -3,11 +3,24 @@ module Errors(
     -- Error(..)
 ) where
 
+import Control.Monad.State (State)
 -- look at this c:
-data Error = SyntaxError String | TypingError String
+data ErrType = SyntaxError | TypingError
 
-type Result = Either String-- TODO: fix this later c:
+data Error = Error { errType :: ErrType, message :: String, line :: Int, position :: Int }
+-- data Error = SyntaxError String | TypingError String
 
+type Result = Either Error-- TODO: fix this later c:
+
+
+-- reportError :: String -> State 
+
+{-
+
+
+
+
+-}
 
 {-
 
