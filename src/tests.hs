@@ -1,4 +1,8 @@
-module Tests where
+module Tests (
+    TokenValue(..),
+    Token(..),
+    tokenize
+) where
 
 import qualified Data.Map as Map
 import Data.Char (isDigit, isAlpha, isAlphaNum, isSpace)
@@ -90,7 +94,7 @@ data Token = Token {
     value    :: TokenValue,
     line     :: Int, 
     position :: Int 
- } deriving (Show)
+ } deriving (Show, Eq)
 
 data Context = Context {
     source       :: String,

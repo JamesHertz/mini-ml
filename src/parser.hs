@@ -5,11 +5,18 @@ module Parser (
     Assigment
 )where
 
-import Scanner ( Token(..) )
-import Control.Monad.State (State, get, put, runState)
+-- import Scanner ( Token(..), TokenValue(..) )
+import Control.Monad.State (State, get, put, evalState, gets, modify)
+import Control.Monad.Except (ExceptT, runExceptT)
+import Errors
 import Data.Maybe (isNothing)
+import Tests
+import Control.Monad.Trans.Except (throwE)
 
-type Assigment = (String, Ast)
+import qualified Data.List.NonEmpty as List
+
+-- 
+type Assigment = (String, Token, Ast)
 data Ast = 
             Binary Ast Token Ast
           | Unary  Token Ast 
@@ -19,7 +26,10 @@ data Ast =
           | Bool Bool
          deriving (Eq, Show)
 
-type ParserState = State [Token]
+-- type ParserState = State [Token]
+
+-- TODO:: Change all case to maybes c:
+type ParserState = ExceptT Error (State [Token])
 
 {-
 Context free grammar:
@@ -35,24 +45,101 @@ Context free grammar:
 <primary>    ::= "true" | "false" | Num | "(" <expr> ")" | Id
 -}
 
+
+parse :: [Token] -> Result Ast
+parse = evalState (runExceptT parse') 
+
+parse' :: ParserState Ast
+parse' = do
+    ast <- decl
+    consume EOF "Expected end of file."
+    return ast
+    
+--
+-- decl :: ParserState Ast
+-- decl = return $ Number 10
+
+
+-- TODO: think about using MaybeT c:
+match :: [TokenValue] -> ParserState (Maybe Token)
+match expected = do
+    tokens <- get
+    case tokens of 
+        (x@(Token value _ _ ):xs) | value `elem` expected -> do
+            put xs
+            return $ Just x
+        _ -> return Nothing
+
+consume :: TokenValue -> String -> ParserState Token
+consume expected msg = do
+    token <- match [expected]
+    maybe (makeError msg) return token
+
+makeError :: String -> ParserState a
+makeError msg = do
+  fst <- gets customHead
+  throwE $ Error SyntaxError msg (Tests.line fst) (Tests.position fst)
+
+--
+-- advance :: ParserState ()
+-- advance = do
+--     tokens <- get
+--     case tokens of
+--         (x:xs) -> put xs
+--         _      -> return ()
+--
+{-
+
+type MaybeParserState = MaybeT (State [Token])
+type ParserState      = ExceptT Error (State [Token])
+
+match :: TokenValue -> MaybeParseState Token
+match expected = do
+    tokens <- get
+    case tokens of 
+      (x@(Token value _ _):xs) -> do
+        guard (value == expected)
+        put xs
+        return x
+      _ -> guard False
+-}
+
+
+    
+
+
+
+-- consume :: Token -> Message -> ParserState Token
+-- consume expected msg = do
+--     t <- match [expected]
+--     case t of
+--         Just t'  -> return t'
+--         Nothing  -> error msg
+-------------------------- 
+-- previous thing
+-------------------------- 
+
 -- the real thing
-parse :: [Token] -> Ast
-parse tokens = 
-    let 
-        (ast, rest) = runState decl tokens
-    in case rest of
-        [EOF] -> ast
-        xs -> error $ "Expression not property ended: " ++ show xs -- TODO: improve this...
+-- parse :: [Token] -> Ast
+-- parse tokens = 
+--     let 
+--         (ast, rest) = runState decl tokens
+--     in case rest of
+--         [EOF] -> ast
+--         xs -> error $ "Expression not property ended: " ++ show xs -- TODO: improve this...
+--
+
+
 
 letAssigments :: ParserState [Assigment]
 letAssigments = do
-    token <- consume (Id "") "Expected and indentifier after 'let' keyword."
-    consume EQ' "Expected '=' after variable name."
-    value <- expr
+    token  <- consume (Id "") "Expected and indentifier after 'let' keyword."
+    eqSign <- consume EQ' "Expected '=' after variable name."
+    value  <- expr
 
     let 
-        (Id name) = token
-        assign    = (name, value)
+        (Token (Id name) _ _) = token
+        assign    = (name, eqSign, value)
     inToken <- match [IN]
     if isNothing inToken then
         (assign:) <$> letAssigments
@@ -122,8 +209,10 @@ unary = do
 
 primary :: ParserState Ast
 primary = do
-    token <- takeToken 
-    case token of
+    token <- gets customHead
+    modify customTail
+    let (Token value _ _ ) = token
+    case value of 
         LEFT_PAREN -> do
             res <- expr
             consume RIGHT_PAREN "Missing enclosing ')'."
@@ -132,32 +221,51 @@ primary = do
         FALSE     -> return $ Bool False
         (Num n)   -> return $ Number n
         (Id name) -> return $ Var name
-        token     -> error  $ "Expected an expression but found: " ++ show token
+        _ -> do 
+            modify (token:) -- put it bach to the top c:
+            makeError "Expected an expression."
 
--- helper function c:
-match :: [Token] -> ParserState (Maybe Token)
-match expected = do
-    tokens <- get
-    case tokens of
-        (x:xs) | x `elem` expected -> put xs >> return (Just x)
-        _ -> return Nothing
 
-type Message = String
-consume :: Token -> Message -> ParserState Token
-consume expected msg = do
-    t <- match [expected]
-    case t of
-        Just t'  -> return t'
-        Nothing  -> error msg
-    
--- TODO: think about this c:
-takeToken :: ParserState Token
-takeToken = do
-    tokens <- get
-    let (head:tail) = tokens
-    put tail
-    return head
+-- to avoid the warning from the compiler c:
+customHead :: [c] -> c
+customHead = List.head . List.fromList
 
+customTail :: [a] -> [a]
+customTail = List.tail . List.fromList
+
+-- -- helper function c:
+-- match :: [Token] -> ParserState (Maybe Token)
+-- match expected = do
+--     tokens <- get
+--     case tokens of
+--         (x:xs) | x `elem` expected -> put xs >> return (Just x)
+--         _ -> return Nothing
+--
+-- type Message = String
+-- consume :: Token -> Message -> ParserState Token
+-- consume expected msg = do
+--     t <- match [expected]
+--     case t of
+--         Just t'  -> return t'
+--         Nothing  -> error msg
+--    
+-- -- TODO: think about this c:
+
+-- check :: TokenValue -> (TokenValue -> a) -> ParserState a
+
+
+-- takeToken :: ParserState Token
+-- takeToken = do
+--     tokens <- get
+--     let (head:tail) = tokens
+--     put tail
+--     return head
+--
+--------------------------------------------
+--  *------------------------------------*
+--  | Hi there                           |
+--  *------------------------------------*
+--------------------------------------------
 
 -- -- OLD parser: FIXME: delete this someday
 -- mapFst :: (a -> c) -> (a, b) -> (c, b)
