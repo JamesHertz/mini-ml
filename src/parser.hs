@@ -55,10 +55,6 @@ parse' = do
     consume EOF "Expected end of file."
     return ast
     
---
--- decl :: ParserState Ast
--- decl = return $ Number 10
-
 
 -- TODO: think about using MaybeT c:
 match :: [TokenValue] -> ParserState (Maybe Token)
@@ -80,15 +76,8 @@ makeError msg = do
   fst <- gets customHead
   throwE $ Error SyntaxError msg (Tests.line fst) (Tests.position fst)
 
---
--- advance :: ParserState ()
--- advance = do
---     tokens <- get
---     case tokens of
---         (x:xs) -> put xs
---         _      -> return ()
---
 {-
+TODO: think about this
 
 type MaybeParserState = MaybeT (State [Token])
 type ParserState      = ExceptT Error (State [Token])
@@ -103,33 +92,6 @@ match expected = do
         return x
       _ -> guard False
 -}
-
-
-    
-
-
-
--- consume :: Token -> Message -> ParserState Token
--- consume expected msg = do
---     t <- match [expected]
---     case t of
---         Just t'  -> return t'
---         Nothing  -> error msg
--------------------------- 
--- previous thing
--------------------------- 
-
--- the real thing
--- parse :: [Token] -> Ast
--- parse tokens = 
---     let 
---         (ast, rest) = runState decl tokens
---     in case rest of
---         [EOF] -> ast
---         xs -> error $ "Expression not property ended: " ++ show xs -- TODO: improve this...
---
-
-
 
 letAssigments :: ParserState [Assigment]
 letAssigments = do
@@ -232,134 +194,3 @@ customHead = List.head . List.fromList
 
 customTail :: [a] -> [a]
 customTail = List.tail . List.fromList
-
--- -- helper function c:
--- match :: [Token] -> ParserState (Maybe Token)
--- match expected = do
---     tokens <- get
---     case tokens of
---         (x:xs) | x `elem` expected -> put xs >> return (Just x)
---         _ -> return Nothing
---
--- type Message = String
--- consume :: Token -> Message -> ParserState Token
--- consume expected msg = do
---     t <- match [expected]
---     case t of
---         Just t'  -> return t'
---         Nothing  -> error msg
---    
--- -- TODO: think about this c:
-
--- check :: TokenValue -> (TokenValue -> a) -> ParserState a
-
-
--- takeToken :: ParserState Token
--- takeToken = do
---     tokens <- get
---     let (head:tail) = tokens
---     put tail
---     return head
---
---------------------------------------------
---  *------------------------------------*
---  | Hi there                           |
---  *------------------------------------*
---------------------------------------------
-
--- -- OLD parser: FIXME: delete this someday
--- mapFst :: (a -> c) -> (a, b) -> (c, b)
--- mapFst f (x,y) = (f x, y)
---
--- letAssigments :: [Token] -> ([Assigment], [Token])
--- letAssigments ((Id name):EQ':ys) = 
---     let
---         (value, rest) = expr ys
---         assigment = (name, value)
---     in case rest of
---         (IN:ys) -> ([assigment], ys)
---         _  ->  mapFst (assigment:) $ letAssigments rest
--- letAssigments (y:_) = error $ "Expected a variable assigment. But found: " ++ show y
-
--- TODO: fix this later
--- decl :: [Token] ->  (Ast, [Token])
--- decl (LET:xs) = 
---     let 
---         (assign, rest) = letAssigments xs
---     in mapFst (LetBlock assign) $ decl rest
--- decl xs = expr xs
-
--- expr :: [Token] -> (Ast, [Token])
--- expr =  logicalAnd
-
--- logicalAnd :: [Token] -> (Ast, [Token])
--- logicalAnd tokens =  
---     let 
---         (ast, rest) = logicalOr tokens
---     in case rest of
---         (op@AND:xs) -> mapFst (Binary ast op) $ logicalAnd xs
---         _ -> (ast, rest)
-
--- logicalOr :: [Token] -> (Ast, [Token])
--- logicalOr tokens =  
---     let 
---         (ast, rest) = comparison tokens
---     in case rest of
---         (op@OR:xs) -> mapFst (Binary ast op) $ logicalOr xs
---         _ -> (ast, rest)
-
--- -- TODO: plans (future c:)
--- comparison :: [Token] -> (Ast, [Token])
--- comparison tokens = 
---     let 
---         (ast, rest) = term tokens
---     in case rest of
---         (op:xs) | op `elem` [
---                 GT', LT', GT_EQ, LT_EQ, EQ_EQ, N_EQ
---             ] -> mapFst (Binary ast op) $ comparison xs
---         _ -> (ast, rest)
-
--- term :: [Token] -> (Ast, [Token])
--- term tokens = 
---     let 
---         (ast, rest) = factor tokens
---     in case rest of
---         (op:xs) | op `elem` [
---             PLUS, MINUS
---             ] -> mapFst (Binary ast op) $ term xs
---         -- (PLUS:xs)  -> mapFst (Add ast) $ term xs
---         -- (MINUS:xs) -> mapFst (Sub ast) $ term xs
---         _ -> (ast, rest)
-
--- factor :: [Token] -> (Ast, [Token])
--- factor tokens = 
---     let 
---         (ast, rest) = unary tokens
---     in case rest of
---         (op:xs) | op `elem` [
---             TIMES, SLASH
---             ] -> mapFst (Binary ast op) $ term xs
---         -- (TIMES:xs) -> mapFst (Mult ast) $ factor xs
---         -- (SLASH:xs) -> mapFst (Div  ast) $ factor xs
---         _ -> (ast, rest)
-
--- unary :: [Token] -> (Ast, [Token])
--- -- unary (MINUS:xs) = mapFst Minus $ unary xs
--- -- unary (BANG:xs)  = mapFst Neg $ unary xs 
--- unary (op@MINUS:xs) = mapFst (Unary op) $ unary xs
--- unary (op@BANG:xs)  = mapFst (Unary op) $ unary xs 
--- unary xs = primary xs
-
--- primary :: [Token] -> (Ast, [Token])
--- primary (TRUE:xs)       = (Bool True, xs)
--- primary (FALSE:xs)      = (Bool False, xs)
--- primary ((Num nr):xs)   = (Number nr, xs)
--- primary ((Id name):xs)  = (Var name, xs)
--- primary (LEFT_PAREN:xs) = 
---     let
---         (ast, rest) = expr xs
---     in case rest of
---         (RIGHT_PAREN:xs) -> (ast, xs)
---         _ -> error "Missing enclosing ')'."
--- primary _ = error "Expected an expression."
--- primary xx = error $ "Expected an expression." ++ show xx
