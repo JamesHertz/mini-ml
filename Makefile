@@ -10,8 +10,10 @@ FLAGS :=
 
 all: $(EXE)
 
-$(EXE): $(SRC)
+$(EXE): $(SRC) | $(BIN_DIR)
 	ghc $(FLAGS) --make -o $@ $(SRC) -outputdir./$(BIN_DIR)
+
+# TODO: explicitely list the dependencies to allow hot compile c:
 
 # $(EXE): $(OBJ)
 # 	ghc $(FLAGS) --make -o $@ $(OBJ) -outputdir./$(BIN_DIR)

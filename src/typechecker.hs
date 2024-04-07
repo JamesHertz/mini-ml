@@ -70,7 +70,7 @@ check (Ast { token, node = Binary left _ right }) env expected result = do
     if left' == right' 
         && right' == expected 
     then return result
-    else makeError token $ "Type error: Expected two " ++ show expected ++ "s but found: " 
+    else makeError token $ "Expected two " ++ show expected ++ "s but found: " 
                     ++ show left' ++ " and " ++ show right' 
 
 checkValue :: Ast -> TypeEnv -> Type -> Result Type -- TODO: finish this
@@ -78,7 +78,7 @@ checkValue (Ast { token, node = Unary _ child }) env expected = do
     exprT <- typeCheck' child env
     if exprT == expected 
         then return expected
-    else makeError token $ "Type error: Expected an " 
+    else makeError token $ "Expected an " 
             ++ show expected ++ " but found a " ++ show exprT
 
 checkEquals :: Ast -> TypeEnv -> Result Type
@@ -89,7 +89,7 @@ checkEquals (Ast { token, node = Binary left _ right } ) env =  do
     if left' == right' 
         then return BoolType
     -- TODO: think about the posibility of displaying the positions of the others types
-    else makeError token $ "Type error: Expected two booleans or two integers but found: " 
+    else makeError token $ "Expected two booleans or two integers but found: " 
                               ++ show left' ++ " and " ++ show right'
 
 makeError :: Token -> String -> Result a

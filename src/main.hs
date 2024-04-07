@@ -1,3 +1,5 @@
+module Main (main) where
+
 import Serializer
 import Core
 import Errors
@@ -28,7 +30,7 @@ compileFile filename =
         putStrLn $ "Compiling " ++ filename
         contents <- readFile filename 
         case compileProgram contents of
-            Left Error { message } -> putStrLn $ "Error: " ++ message
+            Left err -> putStrLn $ formatErr contents err
             Right program -> do
                     (name, handler) <- openTempFile "/tmp" "tmp.jasm"
                     hPutStr handler $ serialize program
@@ -54,7 +56,7 @@ runInterpreter = do
     where
         interpret line = do
             case interpretProgram line of
-                Left Error { message } -> putStrLn $ "Error: " ++ message
+                Left err -> putStrLn $ formatErr line err
                 Right value -> print value
             prompt
 

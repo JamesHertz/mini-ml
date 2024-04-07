@@ -96,6 +96,7 @@ data Token = Token {
     position :: Int 
  } deriving (Show, Eq)
 
+-- TODO: save the start of a line and update it whenever you make a new token c:
 data Context = Context {
     source       :: String,
     currLine     :: Int,
