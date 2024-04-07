@@ -11,6 +11,7 @@ import Errors
 import Data.Maybe (fromMaybe)
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Except (throwE)
+import Text.XHtml (start)
 
 data TokenValue = 
     -- arithmetic
@@ -98,16 +99,22 @@ data Token = Token {
 
 -- TODO: save the start of a line and update it whenever you make a new token c:
 data Context = Context {
-    source       :: String,
-    currLine     :: Int,
-    currPosition :: Int
+    source        :: String,
+    currLine      :: Int,
+    currPosition  :: Int,
+    startPosition :: Int
   }
 
 -- type ScannerState = State Context
 type ScannerState = ExceptT Error (State Context)
 
 tokenize :: String -> Result [Token]
-tokenize src = evalState (runExceptT tokenize') $ Context src 1 (-1)
+tokenize source = evalState (runExceptT tokenize') $ Context {
+        source,
+        currLine      = 1,
+        currPosition  = 0,
+        startPosition = 0
+    }
 
 tokenize' :: ScannerState [Token]
 tokenize' = do
@@ -136,8 +143,8 @@ tokenize' = do
                    '=' -> match '=' EQ_EQ EQ'
                    '!' -> match '=' N_EQ BANG
 
-                   '|' -> consume '|' OR
-                   '&' -> consume '&' AND
+                   '|' -> consume '|' OR  "Expected another '|'."
+                   '&' -> consume '&' AND "Expected another '&'."
 
                    x | isAlpha x -> join x >>= identifier 
                    x | isDigit x -> join x >>= number
@@ -147,7 +154,7 @@ tokenize' = do
         return $ token : rest
         where
             -- joins char with the rest of the characters of the source c:
-            join char = gets $ \(Context source _ _) -> char : source
+            join char = gets $ \Context { source } -> char : source
 
 advance :: ScannerState (Maybe Char)
 advance = do
@@ -161,7 +168,13 @@ advance = do
 makeToken :: TokenValue -> ScannerState Token
 makeToken value = do
   state <- get
-  return $ Token value (currLine state) (currPosition state)
+  updateStarPos
+  return $ Token value (currLine state) (startPosition state)
+  where 
+    updateStarPos = modify $ 
+        \ Context { source, currLine, currPosition } -> Context {
+            source, currLine, currPosition, startPosition = currPosition
+        }
 
 match :: Char -> a -> a -> ScannerState a
 match expected ifTrue ifFalse = do
@@ -172,11 +185,11 @@ match expected ifTrue ifFalse = do
             return ifTrue
         _ -> return ifFalse
 
-consume :: Char -> TokenValue -> ScannerState TokenValue
-consume expected result = do
+consume :: Char -> TokenValue -> String -> ScannerState TokenValue
+consume expected result msg = do
   res <- match expected True False
   if res then return result
-  else makeError $ "Expected a '" ++ [expected] ++ "'."
+  else makeError msg
 
 skipSpaces :: ScannerState ()
 skipSpaces = do
@@ -186,7 +199,16 @@ skipSpaces = do
     pos   = length spaces
     lines = length $ filter (== '\n') spaces
 
-  updateCtx rest lines pos
+  updateCtxSpaces rest lines pos
+  where 
+    updateCtxSpaces newSource lineDiff posDiff = 
+        modify $ \ Context { currLine , currPosition } -> 
+               Context { 
+                    source        = newSource,
+                    currLine      = currLine + lineDiff,
+                    currPosition  = currPosition + posDiff,
+                    startPosition = currPosition + posDiff
+               }
 
 number :: String -> ScannerState TokenValue
 number txt = do
@@ -208,9 +230,15 @@ identifier txt = do
 -- why don't I need a lift??
 updateCtx :: String -> Int -> Int -> ScannerState ()
 updateCtx newSource lineDiff posDiff = 
-    modify $ \(Context source line pos) -> Context newSource (line + lineDiff) (pos + posDiff)
+    modify $ \ Context { currLine, currPosition, startPosition } -> Context { 
+          source        = newSource,
+          currLine      = currLine + lineDiff,
+          currPosition  = currPosition + posDiff,
+          startPosition 
+        }
 
 makeError :: String -> ScannerState a
 makeError msg = do
   ctx <- get
-  throwE $ Error SyntaxError msg (currLine ctx) (currPosition ctx)
+   -- -1 because we are always of by 1 since we start currPosition at 0 (but still call advance)
+  throwE $ Error SyntaxError msg (currLine ctx) (currPosition ctx - 1)
