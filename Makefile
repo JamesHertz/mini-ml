@@ -26,7 +26,7 @@ $(BIN_DIR):
 
 .PHONNY: clean
 clean:
-	@rm -rfv $(BIN_DIR)
+	@rm -fv $(EXE) $(BIN_DIR)/{*.hi,*.o}
 
 
 
