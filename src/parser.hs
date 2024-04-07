@@ -35,6 +35,7 @@ data AstNode =
           | Var      String
           | Number   Int
           | Bool     Bool
+          | Unit
          deriving (Eq, Show)
 
 -- TODO:: Change all case to maybes c:
@@ -51,7 +52,7 @@ Context free grammar:
 <term>       ::= <factor> (( "+" | "-" ) <factor>  )*
 <factor>     ::= <primary> (( "*" | "/" ) <primary> )*
 <unary>      ::= ("-"|"~") <unary> | <primary>
-<primary>    ::= "true" | "false" | Num | "(" <expr> ")" | Id
+<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | Id
 
 -- helpers c:
 <type>       ::=  INT | BOOL | UNIT
@@ -143,9 +144,12 @@ primary = do
     let (Token value _ _ ) = token
     case value of 
         LEFT_PAREN -> do
-            res <- expr
-            consume [RIGHT_PAREN] "Missing enclosing ')'."
-            return res
+            match [RIGHT_PAREN] (do
+                res <- expr
+                consume [RIGHT_PAREN] "Missing enclosing ')'."
+                return res
+             ) $ \_ -> return $ Ast token Unit
+                
         TRUE      -> return $ Ast token $ Bool True
         FALSE     -> return $ Ast token $ Bool False
         (Num n)   -> return $ Ast token $ Number n

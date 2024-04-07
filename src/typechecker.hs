@@ -17,14 +17,15 @@ type TypeEnv = Map.Map String Type
 instance Show Type where
     show IntType  = "integer"
     show BoolType = "boolean"
-    show UnitType = "()"
+    show UnitType = "unit"
 
 typeCheck :: Ast -> Result Type
 typeCheck ast = typeCheck' ast Map.empty
 
 typeCheck' :: Ast -> TypeEnv ->  Result Type
-typeCheck' (Ast { node = Number x }) env = Right IntType
-typeCheck' (Ast { node = Bool x })   env = Right BoolType
+typeCheck' (Ast { node = Number x }) env = return IntType
+typeCheck' (Ast { node = Bool x })   env = return BoolType
+typeCheck' (Ast { node = Unit })     env = return UnitType
 typeCheck' ast@(Ast { node = Unary MINUS x }) env = checkValue x env IntType
 
 -- arithmetic operators
