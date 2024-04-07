@@ -4,19 +4,20 @@ module TypeChecker (
 ) where
 
 -- TODO: improve overall error reporting c:
-import Parser ( Ast(..), AstNode(..), Token(..) )
+import Parser ( Ast(..), AstNode(..), Token(..), Assigment(..))
 import Scanner (Token(..), TokenValue(..))
 import qualified Data.Map as Map
 import Control.Monad (foldM)
 import Errors  
 
-data Type = IntType | BoolType deriving (Eq)
+data Type = IntType | BoolType | UnitType deriving (Eq)
 
 type TypeEnv = Map.Map String Type
 
 instance Show Type where
     show IntType  = "integer"
     show BoolType = "boolean"
+    show UnitType = "()"
 
 typeCheck :: Ast -> Result Type
 typeCheck ast = typeCheck' ast Map.empty
@@ -46,16 +47,23 @@ typeCheck' ast@(Ast { node = Binary _ EQ_EQ _ }) env = checkEquals ast env
 typeCheck' ast@(Ast { node = Binary _ N_EQ  _ }) env = checkEquals ast env
 
 -- TODO: make check more generic so you can use it for this c:
-typeCheck' ast@(Ast { node = Unary BANG _ }) env = checkValue ast env BoolType 
+typeCheck' ast@(Ast { node = Unary NOT _ }) env = checkValue ast env BoolType 
 
 -- handling identifier c:
 typeCheck' (Ast { node = LetBlock assigns body }) env = do
     newEnv <- foldM mapFunc env assigns
     typeCheck' body newEnv
     where 
-        mapFunc map (name, _, value) =  do -- TODO: think about the need of eqSign
-            tt <- typeCheck' value map
-            return $ Map.insert name tt map
+        mapFunc map Assigment{ varName, assignValue, expectedType } = do 
+            typ <- typeCheck' assignValue map
+            maybe (insert typ) (\(typ', token) -> 
+                if typ' == typ then 
+                    insert typ
+                else makeError token $ 
+                        "Expected '" ++ show typ' ++ "' type, but expression produced '" ++ show typ ++ "' type."
+                ) expectedType
+            where 
+                insert typ = return $ Map.insert varName typ map
 
 typeCheck' (Ast { token, node = Var name }) env = 
     maybe (makeError token $ "Undefined identifier: " ++ name) 
@@ -70,16 +78,16 @@ check (Ast { token, node = Binary left _ right }) env expected result = do
     if left' == right' 
         && right' == expected 
     then return result
-    else makeError token $ "Expected two " ++ show expected ++ "s but found: " 
-                    ++ show left' ++ " and " ++ show right' 
+    else makeError token $ "Expected two '" ++ show expected ++ "' type but found: '" 
+                    ++ show left' ++ "' type and '" ++ show right' ++ "' type."
 
 checkValue :: Ast -> TypeEnv -> Type -> Result Type -- TODO: finish this
 checkValue (Ast { token, node = Unary _ child }) env expected = do
     exprT <- typeCheck' child env
     if exprT == expected 
         then return expected
-    else makeError token $ "Expected an " 
-            ++ show expected ++ " but found a " ++ show exprT
+    else makeError token $ "Expected a/an '" 
+            ++ show expected ++ "' type but found a/an '" ++ show exprT ++ "' type."
 
 checkEquals :: Ast -> TypeEnv -> Result Type
 checkEquals (Ast { token, node = Binary left _ right } ) env =  do
@@ -89,8 +97,8 @@ checkEquals (Ast { token, node = Binary left _ right } ) env =  do
     if left' == right' 
         then return BoolType
     -- TODO: think about the posibility of displaying the positions of the others types
-    else makeError token $ "Expected two booleans or two integers but found: " 
-                              ++ show left' ++ " and " ++ show right'
+    else makeError token $ "Expected two 'boolean' type or two 'integer' type but found: '" 
+                              ++ show left' ++ "' type and '" ++ show right' ++ "' type."
 
 makeError :: Token -> String -> Result a
 makeError (Token { Scanner.line, Scanner.position }) msg = 

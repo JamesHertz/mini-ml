@@ -3,9 +3,10 @@ module Parser (
     AstNode(..),
     Token(..),
     parse,
-    Assigment
+    Assigment(..)
 ) where
 
+import {-# SOURCE #-} TypeChecker (Type(..))
 -- import Scanner ( Token(..), TokenValue(..) )
 import Control.Monad.State (State, get, put, evalState, gets, modify)
 import Control.Monad.Except (ExceptT, runExceptT)
@@ -16,12 +17,14 @@ import Control.Monad.Trans.Except (throwE)
 
 import qualified Data.List.NonEmpty as List
 
-{-
+type TypeToken   = Token
+type TypeContext = (Type, TypeToken)
 
--- TODO: think about this c:
-data Ast = Ast { token :: Token, node :: AstNode }
- - -}
-type Assigment = (String, Token, Ast)
+data Assigment = Assigment {
+    varName      :: String,
+    expectedType :: Maybe TypeContext,
+    assignValue  :: Ast
+} deriving (Show, Eq)
 
 data Ast = Ast { token :: Token, node :: AstNode } deriving (Eq, Show)
 
@@ -40,17 +43,19 @@ type ParserState = ExceptT Error (State [Token])
 {-
 Context free grammar:
 <program>    ::=  <decl> EOF
-<decl>       ::= "let" ( Id (":"Id)? "=" <expr> )+ "in" <decl> | <expr>
+<decl>       ::= "let" ( Id (":"<type>)? "=" <expr> )+ "in" <decl> | <expr>
 <expr>       ::= <logicalAnd>
 <logicalAnd> ::= <logicalOr>  ( "&&" <logicalOr> )*
 <logicalOr>  ::= <comparison> ( "||" <comparison>)*
 <comparison> ::= <term>  (( ">" | "<" | "==" | "!=" | ">=" | "<=" ) <term> )*
 <term>       ::= <factor> (( "+" | "-" ) <factor>  )*
 <factor>     ::= <primary> (( "*" | "/" ) <primary> )*
-<unary>      ::= ("-"|"!") <unary> | <primary>
+<unary>      ::= ("-"|"~") <unary> | <primary>
 <primary>    ::= "true" | "false" | Num | "(" <expr> ")" | Id
--}
 
+-- helpers c:
+<type>       ::=  INT | BOOL | UNIT
+-}
 
 parse :: [Token] -> Result Ast
 parse = evalState (runExceptT parse') 
@@ -58,18 +63,30 @@ parse = evalState (runExceptT parse')
 parse' :: ParserState Ast
 parse' = do
     ast <- decl
-    consume EOF "Expected end of file."
+    consume [EOF] "Expected end of file."
     return ast
    
+-- TODO: think about using MaybeT
+parseType :: ParserState (Maybe TypeContext)
+parseType = do
+    match [COLON] (return Nothing) $ \_ -> do
+        typeToken <- consume [INT, BOOL, UNIT] "Expected either 'int', 'bool', or 'unit' type."
+        return $ Just (convert $ value typeToken, typeToken)
+    where
+        convert INT  = IntType
+        convert BOOL = BoolType  
+        convert UNIT = UnitType
+        
 letAssigments :: ParserState [Assigment]
 letAssigments = do
-    token  <- consume (Id "") "Expected and indentifier after 'let' keyword."
-    eqSign <- consume EQ' "Expected '=' after variable name."
-    value  <- expr
+    token  <- consume [Id ""] "Expected and indentifier after 'let' keyword."
+    expectedType <- parseType
+    consume [EQ'] "Expected '=' after variable name."
+    assignValue  <- expr
 
     let 
-        (Token (Id name) _ _) = token
-        assign    = (name, eqSign, value)
+        (Token (Id varName) _ _) = token
+        assign    = Assigment { varName, expectedType, assignValue }
 
     match [IN] ((assign:) <$> letAssigments) $ \_ -> return [assign]
 
@@ -116,7 +133,7 @@ factor = do
 
 unary :: ParserState Ast
 unary = do
-    match [MINUS, BANG] primary $ 
+    match [MINUS, NOT] primary $ 
         \t -> Ast t . Unary (value t) <$> unary 
 
 primary :: ParserState Ast
@@ -127,7 +144,7 @@ primary = do
     case value of 
         LEFT_PAREN -> do
             res <- expr
-            consume RIGHT_PAREN "Missing enclosing ')'."
+            consume [RIGHT_PAREN] "Missing enclosing ')'."
             return res
         TRUE      -> return $ Ast token $ Bool True
         FALSE     -> return $ Ast token $ Bool False
@@ -149,9 +166,9 @@ match expected ifNothing ifJust = do
             ifJust x
         _ -> ifNothing
 
-consume :: TokenValue -> String -> ParserState Token
+consume :: [TokenValue] -> String -> ParserState Token
 consume expected msg = do
-    match [expected] (makeError msg) return
+    match expected (makeError msg) return
     -- maybe (makeError msg) return token
 
 makeError :: String -> ParserState a

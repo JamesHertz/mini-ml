@@ -30,12 +30,20 @@ data TokenValue =
     | LT'
     | LT_EQ 
     -- single character
-    | BANG
+    | NOT   -- tild (~)
+    | COLON -- (:)
     -- keywords
     | TRUE
     | FALSE
     | LET
     | IN
+    | IF
+    | THEN
+    | ELSE
+    | END
+    | BOOL
+    | INT
+    | UNIT
     -- parenthesis
     | LEFT_PAREN
     | RIGHT_PAREN 
@@ -47,6 +55,7 @@ data TokenValue =
  deriving (Show, Ord)
 
 
+-- FIXME: find a better solution for this (ask the Mrs Haskell)
 instance Eq TokenValue where
     -- I needed the two definition below, because of the consume
     -- function defined at 'parser.hs' so I had to define Eq by hand c:
@@ -68,16 +77,27 @@ instance Eq TokenValue where
     N_EQ  == N_EQ  = True
     GT_EQ == GT_EQ = True 
     LT_EQ == LT_EQ = True 
-    BANG  == BANG  = True
+
+    NOT   == NOT   = True
+    COLON == COLON = True
 
     TRUE  == TRUE  = True
     FALSE == FALSE = True
+
+    IF   == IF   = True
+    THEN == THEN = True
+    ELSE == ELSE = True
+    END  == END  = True
+
+    BOOL == BOOL = True
+    INT  == INT  = True
+    UNIT == UNIT = True
 
     LEFT_PAREN  == LEFT_PAREN = True
     RIGHT_PAREN == RIGHT_PAREN = True 
 
     LET == LET = True
-    IN  == IN = True
+    IN  == IN  = True
     EOF == EOF = True
 
     _ == _ = False
@@ -88,7 +108,14 @@ reservedKeywors = Map.fromList [
      ("true", TRUE),
      ("false", FALSE),
      ("let", LET),
-     ("in", IN)
+     ("in", IN),
+     ("if", IF),
+     ("then", THEN),
+     ("else", ELSE),
+     ("end", END),
+     ("int", INT),
+     ("bool", BOOL),
+     ("unit", UNIT)
     ]
 
 data Token = Token { 
@@ -137,12 +164,17 @@ tokenize' = do
                    '(' -> return LEFT_PAREN
                    ')' -> return RIGHT_PAREN
 
+                   -- other single chars
+                   '~' -> return NOT
+                   ':' -> return COLON
+
                    -- comparison
                    '>' -> match '=' GT_EQ GT' 
                    '<' -> match '=' LT_EQ LT'
                    '=' -> match '=' EQ_EQ EQ'
-                   '!' -> match '=' N_EQ BANG
+                   -- '!' -> match '=' N_EQ BANG -- FIXME: uncomment me in the Future c:
 
+                   '!' -> consume '=' N_EQ "Expected '=' after '!'." -- FIXME: delete me in the future c:
                    '|' -> consume '|' OR  "Expected another '|'."
                    '&' -> consume '&' AND "Expected another '&'."
 

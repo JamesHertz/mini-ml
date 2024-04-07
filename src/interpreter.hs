@@ -3,7 +3,7 @@ module Interpreter (
     eval,
 )where
 
-import Parser ( Ast(..), AstNode(..), Token(..), Assigment  )
+import Parser ( Ast(..), AstNode(..), Token(..), Assigment(..)  )
 import Scanner (TokenValue(..))
 import qualified Data.Map as Map
 
@@ -37,14 +37,15 @@ eval' (Ast { node = Binary left GT_EQ right }) env = BoolValue $ evalInt left en
 eval' (Ast { node = Binary left LT_EQ right }) env = BoolValue $ evalInt left env <= evalInt right env
 eval' (Ast { node = Binary left OR  right }) env = BoolValue $ evalBool left env || evalBool right env
 eval' (Ast { node = Binary left AND right }) env = BoolValue $ evalBool left env && evalBool right env
-eval' (Ast { node = Unary BANG expr }) env = BoolValue $ not $ evalBool expr env
+eval' (Ast { node = Unary NOT expr }) env = BoolValue $ not $ evalBool expr env
 
 eval' (Ast { node = LetBlock assigns body }) env = 
     let
         newEnv = foldl mapFunc env assigns
     in eval' body newEnv
     where 
-        mapFunc map (name, _, value) = Map.insert name (eval' value map)  map
+        mapFunc map Assigment {varName, assignValue} = 
+            Map.insert varName (eval' assignValue map)  map
 
 eval' (Ast { node = Var name }) env = 
     case Map.lookup name env of

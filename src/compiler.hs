@@ -96,7 +96,7 @@ compile' (Ast { node = Binary left op right })  = do
 compile' (Ast { node = Unary op value }) = do
     value' <- compile' value
     let instr = case op of
-         BANG  -> [INeg] -- FIXME: use if and iconsts c: (someday)
+         NOT  -> [INeg] -- FIXME: use if and iconsts c: (someday)
          MINUS -> [INeg]
     return $ value' ++ instr
 
