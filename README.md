@@ -13,4 +13,4 @@ For the first time you might want to run `./bin/main --help` go get a feel of ho
 - [ ] Add support for types on variable declarations
 - [ ] Rename some tokens to improve code readability
 - [ ] Look for better ways to design your CLI interface c:
-- [ ] Think about storing information about places on the tokens (probaby coming up with a token type c:)
+- [x] Think about storing information about places on the tokens (probaby coming up with a token type c:)
