@@ -1,10 +1,8 @@
-import Parser
-import Scanner
-import TypeChecker
-import Interpreter
-import Compiler
-import Serializer
+module Main (main) where
 
+import Serializer
+import Core
+import Errors
 
 
 import Control.Monad (unless)
@@ -31,19 +29,18 @@ compileFile filename =
     handle readHandler $ do
         putStrLn $ "Compiling " ++ filename
         contents <- readFile filename 
-        let 
-            ast      = parse $ tokenize contents
-            program  =  compile ast
+        case compileProgram contents of
+            Left err -> putStrLn $ formatErr contents err
+            Right program -> do
+                    (name, handler) <- openTempFile "/tmp" "tmp.jasm"
+                    hPutStr handler $ serialize program
+                    hFlush handler
+                    hClose handler
 
-        (name, handler) <- openTempFile "/tmp" "tmp.jasm"
-        hPutStr handler $ serialize program
-        hFlush handler
-        hClose handler
+                    rawSystem "java" ["-jar", "bin/jasmin.jar", name]
 
-        rawSystem "java" ["-jar", "bin/jasmin.jar", name]
-
-        -- removeFile name
-        return ()
+                    -- removeFile name
+                    return ()
     where 
         readHandler :: IOError -> IO a
         readHandler e 
@@ -58,13 +55,9 @@ runInterpreter = do
     mapM_ interpret $ lines txt
     where
         interpret line = do
-            let 
-                ast    =  parse $ tokenize line
-                tp     =  typeCheck ast
-            case tp of
-                Left msg -> do
-                    putStrLn $ "Error: " ++ msg
-                _ -> print $ eval ast
+            case interpretProgram line of
+                Left err -> putStrLn $ formatErr line err
+                Right value -> print value
             prompt
 
 -- FIXME: later c:

@@ -6,9 +6,11 @@ module Compiler(
     Cond(..)
 ) where
 
-import Parser (Ast(..), Token(..))
+import Parser (Ast(..), AstNode(..))
 import TypeChecker (Type(..), typeCheck)
+import Scanner (TokenValue(..))
 import Control.Monad.State (State, evalState, gets, put)
+import Errors (Result)
 
 -- helper types
 type Label = String
@@ -58,25 +60,22 @@ instance Show Cond where
   show CLE = "le"
   show CGE = "ge"
 
-
 type CompilerState = State Int 
 
 type Program = [Instr]
 
-compile :: Ast -> Program
-compile ast =
-    let 
-        typ = case typeCheck ast of
-                Left msg -> error $ "Error: " ++ msg
-                Right t  -> t
-        program = evalState (compile' ast) 0
-    in  program ++ [Print typ]
+-- TODO: think about this c:
+compile :: Ast -> Result Program
+compile ast = do
+    typ <- typeCheck ast
+    let program = evalState (compile' ast) 0
+    return $ program ++ [Print typ]
 
 compile' :: Ast -> CompilerState Program
-compile' (Number n)   = return [SIpush n]
-compile' (Bool value) = return [SIpush $ if value then 1 else 0] 
+compile' (Ast { node = Number n })   = return [SIpush n]
+compile' (Ast { node = Bool value }) = return [SIpush $ if value then 1 else 0] 
 
-compile' (Binary left op right)  = do
+compile' (Ast { node = Binary left op right })  = do
   left'  <- compile' left 
   right' <- compile' right 
   instr  <- case op of
@@ -94,10 +93,10 @@ compile' (Binary left op right)  = do
       GT_EQ -> compileCompOperations CGE
   return $ left' ++ right' ++ instr
 
-compile' (Unary op value) = do
+compile' (Ast { node = Unary op value }) = do
     value' <- compile' value
     let instr = case op of
-         BANG  -> [INeg] -- FIXME: use if and iconsts c: (someday)
+         NOT  -> [INeg] -- FIXME: use if and iconsts c: (someday)
          MINUS -> [INeg]
     return $ value' ++ instr
 

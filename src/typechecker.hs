@@ -4,90 +4,109 @@ module TypeChecker (
 ) where
 
 -- TODO: improve overall error reporting c:
-import Parser ( Ast(..), Token(..) )
+import Parser ( Ast(..), AstNode(..), Token(..), Assigment(..))
+import Scanner (Token(..), TokenValue(..))
 import qualified Data.Map as Map
 import Control.Monad (foldM)
-import Errors ( Result )
+import Errors  
 
-data Type = IntType | BoolType deriving (Eq)
+data Type = IntType | BoolType | UnitType deriving (Eq)
 
 type TypeEnv = Map.Map String Type
--- type Result  = Either String
-
 
 instance Show Type where
     show IntType  = "integer"
     show BoolType = "boolean"
+    show UnitType = "unit"
 
 typeCheck :: Ast -> Result Type
 typeCheck ast = typeCheck' ast Map.empty
 
 typeCheck' :: Ast -> TypeEnv ->  Result Type
-typeCheck' (Number x) env = Right IntType
-typeCheck' (Bool x)   env = Right BoolType
-typeCheck' (Unary MINUS x)  env = checkValue x env IntType
+typeCheck' (Ast { node = Number x }) env = return IntType
+typeCheck' (Ast { node = Bool x })   env = return BoolType
+typeCheck' (Ast { node = Unit })     env = return UnitType
+typeCheck' ast@(Ast { node = Unary MINUS x }) env = checkValue x env IntType
 
--- arithemetic operators
-typeCheck' (Binary left PLUS  right) env = check left right env IntType IntType
-typeCheck' (Binary left MINUS right) env = check left right env IntType IntType
-typeCheck' (Binary left TIMES right) env = check left right env IntType IntType
-typeCheck' (Binary left SLASH right) env = check left right env IntType IntType
+-- arithmetic operators
+typeCheck' ast@(Ast { node = Binary _ PLUS  _ }) env = check ast env IntType IntType
+typeCheck' ast@(Ast { node = Binary _ MINUS _ }) env = check ast env IntType IntType
+typeCheck' ast@(Ast { node = Binary _ TIMES _ }) env = check ast env IntType IntType
+typeCheck' ast@(Ast { node = Binary _ SLASH _ }) env = check ast env IntType IntType
 
 -- logical operators
-typeCheck' (Binary left AND right) env = check left right env BoolType BoolType
-typeCheck' (Binary left OR  right) env = check left right env BoolType BoolType
+typeCheck' ast@(Ast { node = Binary _ AND _ }) env = check ast env BoolType BoolType
+typeCheck' ast@(Ast { node = Binary _ OR  _ }) env = check ast env BoolType BoolType
 
 -- comparison operatos 
-typeCheck' (Binary left  GT'  right) env = check left right env IntType BoolType
-typeCheck' (Binary left  LT'  right) env = check left right env IntType BoolType
-typeCheck' (Binary left GT_EQ right) env = check left right env IntType BoolType
-typeCheck' (Binary left LT_EQ right) env = check left right env IntType BoolType
+typeCheck' ast@(Ast { node = Binary _  GT'  _ }) env = check ast env IntType BoolType
+typeCheck' ast@(Ast { node = Binary _  LT'  _ }) env = check ast env IntType BoolType
+typeCheck' ast@(Ast { node = Binary _ GT_EQ _ }) env = check ast env IntType BoolType
+typeCheck' ast@(Ast { node = Binary _ LT_EQ _ }) env = check ast env IntType BoolType
 
-typeCheck' (Binary left EQ_EQ right) env = checkEquals left right env
-typeCheck' (Binary left N_EQ right)  env = checkEquals left right env
+typeCheck' ast@(Ast { node = Binary _ EQ_EQ _ }) env = checkEquals ast env
+typeCheck' ast@(Ast { node = Binary _ N_EQ  _ }) env = checkEquals ast env
 
 -- TODO: make check more generic so you can use it for this c:
-typeCheck' (Unary BANG expr) env = checkValue expr env BoolType 
+typeCheck' ast@(Ast { node = Unary NOT _ }) env = checkValue ast env BoolType 
 
 -- handling identifier c:
-typeCheck' (LetBlock assigns body) env = do
+typeCheck' (Ast { node = LetBlock assigns body }) env = do
     newEnv <- foldM mapFunc env assigns
     typeCheck' body newEnv
     where 
-        mapFunc map (name, value) =  do
-            tt <- typeCheck' value map
-            return $ Map.insert name tt map
+        mapFunc map Assigment{ varName, assignValue, expectedType } = do 
+            typ <- typeCheck' assignValue map
+            maybe (insert typ) (\(typ', token) -> 
+                if typ' == typ then 
+                    insert typ
+                else makeError token $ 
+                        "Expected '" ++ show typ' ++ "' type, but expression produced '" ++ show typ ++ "' type."
+                ) expectedType
+            where 
+                insert typ = return $ Map.insert varName typ map
 
-typeCheck' (Var name) env = 
-    case Map.lookup name env of
-        Just value -> return value
-        Nothing -> Left $ "Undefined identifier: " ++ name
+typeCheck' (Ast { token, node = Var name }) env = 
+    maybe (makeError token $ "Undefined identifier: " ++ name) 
+            return $  Map.lookup name env 
 
 -- Helper function c:
-check :: Ast -> Ast -> TypeEnv -> Type -> Type -> Result Type
-check left right env expected result = do
+check :: Ast -> TypeEnv -> Type -> Type -> Result Type
+check (Ast { token, node = Binary left _ right }) env expected result = do
     left'  <- typeCheck' left  env
     right' <- typeCheck' right env
 
     if left' == right' 
         && right' == expected 
     then return result
-    else Left $ "Type error: Expected two " ++ show expected ++ "s but found: " 
-                    ++ show left' ++ " and " ++ show right' 
+    else makeError token $ "Expected two '" ++ show expected ++ "' type but found: '" 
+                    ++ show left' ++ "' type and '" ++ show right' ++ "' type."
 
 checkValue :: Ast -> TypeEnv -> Type -> Result Type -- TODO: finish this
-checkValue ast env expected = do
-    exprT <- typeCheck' ast env
+checkValue (Ast { token, node = Unary _ child }) env expected = do
+    exprT <- typeCheck' child env
     if exprT == expected 
         then return expected
-    else Left $ "Type error: Expected an " ++ show expected ++ " but found a " ++ show exprT
+    else makeError token $ "Expected a/an '" 
+            ++ show expected ++ "' type but found a/an '" ++ show exprT ++ "' type."
 
-checkEquals :: Ast -> Ast -> TypeEnv -> Result Type
-checkEquals left right env =  do
+checkEquals :: Ast -> TypeEnv -> Result Type
+checkEquals (Ast { token, node = Binary left _ right } ) env =  do
     left'  <- typeCheck' left env
     right' <- typeCheck' right env
 
     if left' == right' 
         then return BoolType
-    else Left $ "Type error: Expected two booleans or two integers but found: " 
-                      ++ show left' ++ " and " ++ show right'
+    -- TODO: think about the posibility of displaying the positions of the others types
+    else makeError token $ "Expected two 'boolean' type or two 'integer' type but found: '" 
+                              ++ show left' ++ "' type and '" ++ show right' ++ "' type."
+
+makeError :: Token -> String -> Result a
+makeError (Token { Scanner.line, Scanner.position }) msg = 
+    Left $ Error { 
+                   errType  = TypingError, 
+                   message  = msg, 
+            Errors.line     = line, 
+            Errors.position = position 
+        }
+
