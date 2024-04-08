@@ -38,6 +38,7 @@ data AstNode =
           | Var      String
           | Number   Int
           | Bool     Bool
+          | Sequence Ast Ast
           | Unit
          deriving (Eq, Show)
 
@@ -48,7 +49,7 @@ type ParserState = ExceptT Error (State [Token])
 Context free grammar:
 <program>    ::=  <decl> EOF
 <decl>       ::= "let" ( Id (":"<type>)? "=" <expr> )+ "in" <decl> | <expr>
-<expr>       ::= <logicalAnd>
+<expr>       ::= <logicalAnd> (";" <logicalAnd> )*
 <logicalAnd> ::= <logicalOr>  ( "&&" <logicalOr> )*
 <logicalOr>  ::= <comparison> ( "||" <comparison>)*
 <comparison> ::= <term>  (( ">" | "<" | "==" | "!=" | ">=" | "<=" ) <term> )*
@@ -103,7 +104,11 @@ decl = do
             Ast l . LetBlock assigns <$> decl
 
 expr :: ParserState Ast
-expr = logicalAnd
+expr = do 
+    left <- logicalAnd
+    match [SEMI_COLON] (return left) $
+        \t -> Ast t . Sequence left <$> expr
+
 --
 logicalAnd :: ParserState Ast
 logicalAnd = do

@@ -16,9 +16,9 @@ For the first time you might want to run `./bin/main --help` go get a feel of ho
 - [x] Think about storing information about places on the tokens (probaby coming up with a token type c:)
 
 # Features to implement
-- [ ] If stamemt
+- [x] If stamemt
 - [ ] Assigment
 - [ ] While loop
 - [ ] Functions print and println
-- [ ] Semi-colon expressions c:
+- [x] Semi-colon expressions c:
 - [ ] References things (`new`, `!` and `ref` type)

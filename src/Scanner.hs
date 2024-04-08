@@ -32,6 +32,7 @@ data TokenValue =
     -- single character
     | NOT   -- tild (~)
     | COLON -- (:)
+    | SEMI_COLON
     -- keywords
     | TRUE
     | FALSE
@@ -80,6 +81,8 @@ instance Eq TokenValue where
 
     NOT   == NOT   = True
     COLON == COLON = True
+
+    SEMI_COLON == SEMI_COLON = True
 
     TRUE  == TRUE  = True
     FALSE == FALSE = True
@@ -167,6 +170,7 @@ tokenize' = do
                    -- other single chars
                    '~' -> return NOT
                    ':' -> return COLON
+                   ';' -> return SEMI_COLON
 
                    -- comparison
                    '>' -> match '=' GT_EQ GT' 

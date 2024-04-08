@@ -66,6 +66,10 @@ typeCheck' Ast { node = LetBlock assigns body } env = do
             where 
                 insert typ = return $ Map.insert varName typ map
 
+typeCheck' Ast { token, node = Var name } env = 
+    maybe (makeError token $ "Undefined identifier: " ++ name) 
+            return $  Map.lookup name env 
+
 typeCheck' Ast { token, node = If { condition, body, elseBody } } env = do
     checkValue condition env BoolType
     bodyType <- typeCheck' body env
@@ -76,12 +80,9 @@ typeCheck' Ast { token, node = If { condition, body, elseBody } } env = do
                                 ++ show bodyType ++ " type and " ++ show elseType ++ " type."
      ) elseBody
 
-
-
-typeCheck' Ast { token, node = Var name } env = 
-    maybe (makeError token $ "Undefined identifier: " ++ name) 
-            return $  Map.lookup name env 
-
+typeCheck' Ast { node = Sequence fst snd } env  = do
+    typeCheck' fst env
+    typeCheck' snd env
 
 -- Helper function c:
 check :: Ast -> TypeEnv -> Type -> Type -> Result Type
