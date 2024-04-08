@@ -48,7 +48,7 @@ typeCheck' ast@Ast { node = Binary _ EQ_EQ _ } env = checkEquals ast env
 typeCheck' ast@Ast { node = Binary _ N_EQ  _ } env = checkEquals ast env
 
 -- TODO: make check more generic so you can use it for this c:
-typeCheck' ast@Ast { node = Unary NOT _ } env = checkValue ast env BoolType 
+typeCheck' ast@Ast { node = Unary NOT value } env = checkValue value env BoolType 
 
 -- handling identifier c:
 typeCheck' Ast { node = LetBlock assigns body } env = do
@@ -66,9 +66,22 @@ typeCheck' Ast { node = LetBlock assigns body } env = do
             where 
                 insert typ = return $ Map.insert varName typ map
 
+typeCheck' Ast { token, node = If { condition, body, elseBody } } env = do
+    checkValue condition env BoolType
+    bodyType <- typeCheck' body env
+    maybe (return UnitType) (\ast -> do
+        elseType <- typeCheck' ast env
+        if elseType == bodyType then return bodyType
+        else makeError token $ "Expected both branch of the if to produce same value but found " 
+                                ++ show bodyType ++ " type and " ++ show elseType ++ " type."
+     ) elseBody
+
+
+
 typeCheck' Ast { token, node = Var name } env = 
     maybe (makeError token $ "Undefined identifier: " ++ name) 
             return $  Map.lookup name env 
+
 
 -- Helper function c:
 check :: Ast -> TypeEnv -> Type -> Type -> Result Type
@@ -83,8 +96,8 @@ check Ast { token, node = Binary left _ right } env expected result = do
                     ++ show left' ++ "' type and '" ++ show right' ++ "' type."
 
 checkValue :: Ast -> TypeEnv -> Type -> Result Type -- TODO: finish this
-checkValue Ast { token, node = Unary _ child } env expected = do
-    exprT <- typeCheck' child env
+checkValue ast@Ast { token }  env expected = do
+    exprT <- typeCheck' ast env
     if exprT == expected 
         then return expected
     else makeError token $ "Expected a/an '" 

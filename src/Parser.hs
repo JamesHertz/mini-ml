@@ -28,10 +28,13 @@ data Assigment = Assigment {
 
 data Ast = Ast { token :: Token, node :: AstNode } deriving (Eq, Show)
 
+type Condition = Ast
+type Body      = Ast
 data AstNode = 
             Binary   Ast TokenValue Ast
           | Unary    TokenValue Ast 
           | LetBlock [Assigment] Ast
+          | If { condition :: Ast, body :: Ast, elseBody :: Maybe Ast }
           | Var      String
           | Number   Int
           | Bool     Bool
@@ -52,7 +55,8 @@ Context free grammar:
 <term>       ::= <factor> (( "+" | "-" ) <factor>  )*
 <factor>     ::= <primary> (( "*" | "/" ) <primary> )*
 <unary>      ::= ("-"|"~") <unary> | <primary>
-<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | Id
+<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | Id | <ifDecl>
+<ifDecl>     ::= "if" <expr> "then" <decl> ("else" <decl>)? "end"
 
 -- helpers c:
 <type>       ::=  INT | BOOL | UNIT
@@ -154,6 +158,16 @@ primary = do
         FALSE     -> return $ Ast token $ Bool False
         (Num n)   -> return $ Ast token $ Number n
         (Id name) -> return $ Ast token $ Var name
+        IF        -> do
+            condition <- expr
+            consume [THEN] "Expected 'then' after if condition."
+            body <- decl
+            elseBody <- match [ELSE] (return Nothing) (const $ Just <$> decl)
+            consume [END] "Expected 'end' at the end of the if then else declaration."
+
+            return $ Ast token $ If { condition, body, elseBody }
+
+
         _ -> do 
             modify (token:) -- put it bach to the top c:
             makeError "Expected an expression."

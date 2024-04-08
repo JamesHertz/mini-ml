@@ -41,6 +41,13 @@ eval' Ast { node = Binary left OR  right } env = BoolValue $ evalBool left env |
 eval' Ast { node = Binary left AND right } env = BoolValue $ evalBool left env && evalBool right env
 eval' Ast { node = Unary NOT expr } env = BoolValue $ not $ evalBool expr env
 
+eval' Ast { node = If { condition, body, elseBody } } env = 
+    let 
+        condValue   = evalBool condition env
+        resultValue = if condValue then eval' body env
+                      else maybe UnitValue (`eval'` env) elseBody
+    in maybe UnitValue (const resultValue) elseBody
+
 eval' Ast { node = LetBlock assigns body } env = 
     let
         newEnv = foldl mapFunc env assigns
