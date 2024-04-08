@@ -48,7 +48,7 @@ type ParserState = ExceptT Error (State [Token])
 {-
 Context free grammar:
 <program>    ::=  <decl> EOF
-<decl>       ::= "let" ( Id (":"<type>)? "=" <expr> )+ "in" <decl> | <expr>
+<decl>       ::= <letDecl> | <expr> 
 <expr>       ::= <logicalAnd> (";" <logicalAnd> )*
 <logicalAnd> ::= <logicalOr>  ( "&&" <logicalOr> )*
 <logicalOr>  ::= <comparison> ( "||" <comparison>)*
@@ -56,8 +56,11 @@ Context free grammar:
 <term>       ::= <factor> (( "+" | "-" ) <factor>  )*
 <factor>     ::= <primary> (( "*" | "/" ) <primary> )*
 <unary>      ::= ("-"|"~") <unary> | <primary>
-<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | Id | <ifDecl>
-<ifDecl>     ::= "if" <expr> "then" <decl> ("else" <decl>)? "end"
+<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | ID | <ifExpr> | <printExpr> 
+<ifExpr>     ::= "if" <expr> "then" <decl> ("else" <decl>)? "end"
+
+<letDecl>    ::= "let" ( Id (":"<type>)? "=" <expr> )+ "in" <decl>
+<printExpr>  ::= ( "print" | "println" ) <expr> 
 
 -- helpers c:
 <type>       ::=  INT | BOOL | UNIT
@@ -99,9 +102,9 @@ letAssigments = do
 -- decl = match [LET] >>= maybe expr (\_ -> return (Bool True)) -- TODO: think about this 
 decl :: ParserState Ast
 decl = do
-    match [LET] expr $ \l -> do
+    match [LET] expr $ \t -> do
             assigns <- letAssigments
-            Ast l . LetBlock assigns <$> decl
+            Ast t . LetBlock assigns <$> decl
 
 expr :: ParserState Ast
 expr = do 
@@ -172,11 +175,13 @@ primary = do
 
             return $ Ast token $ If { condition, body, elseBody }
 
+        PRINT    -> Ast token . Unary value <$> expr
+        PRINTLN  -> Ast token . Unary value <$> expr
 
         _ -> do 
             modify (token:) -- put it bach to the top c:
             makeError "Expected an expression."
-        
+         
 
 -- Helper functions
 -- TODO: think about using MaybeT c:
@@ -184,10 +189,15 @@ match :: [TokenValue] -> ParserState a -> (Token -> ParserState a) -> ParserStat
 match expected ifNothing ifJust = do
     tokens <- get
     case tokens of 
-        (x@(Token value _ _ ):xs) | value `elem` expected -> do
+        (x@(Token value _ _ ):xs) |  any (same value) expected -> do
             put xs
             ifJust x
         _ -> ifNothing
+
+    where
+        same (Num _) (Num _) = True
+        same (Id _) (Id _)   = True
+        same x y = x == y
 
 consume :: [TokenValue] -> String -> ParserState Token
 consume expected msg = do
@@ -216,8 +226,8 @@ match :: TokenValue -> MaybeParseState Token
 match expected = do
     tokens <- get
     case tokens of 
-      (x@(Token value _ _):xs) -> do
-        guard (value == expected)
+      (x @ Token { value }:xs) -> do
+        guard (value `same` expected)
         put xs
         return x
       _ -> guard False

@@ -13,7 +13,7 @@ compileProgram src = do
     ast    <- parse tokens
     compile ast
 
-interpretProgram :: String -> Result Value
+interpretProgram :: String -> Result (IO Value)
 interpretProgram src =  do
     tokens <- tokenize src
     ast    <- parse tokens

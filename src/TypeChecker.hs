@@ -76,13 +76,21 @@ typeCheck' Ast { token, node = If { condition, body, elseBody } } env = do
     maybe (return UnitType) (\ast -> do
         elseType <- typeCheck' ast env
         if elseType == bodyType then return bodyType
-        else makeError token $ "Expected both branch of the if to produce same value but found " 
-                                ++ show bodyType ++ " type and " ++ show elseType ++ " type."
+        else makeError token $ "Expected both branch of the if to produce same type but found '" 
+                                ++ show bodyType ++ "' type and '" ++ show elseType ++ "' type."
      ) elseBody
 
 typeCheck' Ast { node = Sequence fst snd } env  = do
     typeCheck' fst env
     typeCheck' snd env
+
+typeCheck' Ast { node = Unary PRINTLN value } env = do
+    typeCheck' value env
+    return UnitType
+
+typeCheck' Ast { node = Unary PRINT value } env = do
+    typeCheck' value env
+    return UnitType
 
 -- Helper function c:
 check :: Ast -> TypeEnv -> Type -> Type -> Result Type

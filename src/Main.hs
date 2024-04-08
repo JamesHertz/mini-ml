@@ -4,7 +4,6 @@ import Serializer
 import Core
 import Errors
 
-
 import Control.Monad (unless)
 import System.IO (hFlush, stdout, hGetContents, openTempFile, hPutStrLn, stderr, print, hPutStr, hClose)
 import System.Environment (getArgs, getProgName)
@@ -57,7 +56,9 @@ runInterpreter = do
         interpret line = do
             case interpretProgram line of
                 Left err -> putStrLn $ formatErr line err
-                Right value -> print value
+                Right value -> do 
+                    value' <- value -- FIXME: decide what to do with this c:
+                    putStrLn $ "\n=> " ++ show value' -- this will only happen for REPL
             prompt
 
 -- FIXME: later c:

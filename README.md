@@ -10,7 +10,7 @@ For the first time you might want to run `./bin/main --help` go get a feel of ho
 # TODOs:
 - [x] Figure a way to handle and report errors
 - [ ] Write a set of tests
-- [ ] Add support for types on variable declarations
+- [x] Add support for types on variable declarations
 - [ ] Rename some tokens to improve code readability
 - [ ] Look for better ways to design your CLI interface c:
 - [x] Think about storing information about places on the tokens (probaby coming up with a token type c:)
@@ -19,6 +19,6 @@ For the first time you might want to run `./bin/main --help` go get a feel of ho
 - [x] If stamemt
 - [ ] Assigment
 - [ ] While loop
-- [ ] Functions print and println
+- [x] Functions print and println
 - [x] Semi-colon expressions c:
 - [ ] References things (`new`, `!` and `ref` type)
