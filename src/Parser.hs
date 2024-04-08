@@ -28,13 +28,17 @@ data Assigment = Assigment {
 
 data Ast = Ast { token :: Token, node :: AstNode } deriving (Eq, Show)
 
+type Condition = Ast
+type Body      = Ast
 data AstNode = 
             Binary   Ast TokenValue Ast
           | Unary    TokenValue Ast 
           | LetBlock [Assigment] Ast
+          | If { condition :: Ast, body :: Ast, elseBody :: Maybe Ast }
           | Var      String
           | Number   Int
           | Bool     Bool
+          | Sequence Ast Ast
           | Unit
          deriving (Eq, Show)
 
@@ -44,15 +48,19 @@ type ParserState = ExceptT Error (State [Token])
 {-
 Context free grammar:
 <program>    ::=  <decl> EOF
-<decl>       ::= "let" ( Id (":"<type>)? "=" <expr> )+ "in" <decl> | <expr>
-<expr>       ::= <logicalAnd>
+<decl>       ::= <letDecl> | <expr> 
+<expr>       ::= <logicalAnd> (";" <logicalAnd> )*
 <logicalAnd> ::= <logicalOr>  ( "&&" <logicalOr> )*
 <logicalOr>  ::= <comparison> ( "||" <comparison>)*
 <comparison> ::= <term>  (( ">" | "<" | "==" | "!=" | ">=" | "<=" ) <term> )*
 <term>       ::= <factor> (( "+" | "-" ) <factor>  )*
 <factor>     ::= <primary> (( "*" | "/" ) <primary> )*
 <unary>      ::= ("-"|"~") <unary> | <primary>
-<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | Id
+<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | ID | <ifExpr> | <printExpr> 
+<ifExpr>     ::= "if" <expr> "then" <decl> ("else" <decl>)? "end"
+
+<letDecl>    ::= "let" ( Id (":"<type>)? "=" <expr> )+ "in" <decl>
+<printExpr>  ::= ( "print" | "println" ) <expr> 
 
 -- helpers c:
 <type>       ::=  INT | BOOL | UNIT
@@ -94,12 +102,16 @@ letAssigments = do
 -- decl = match [LET] >>= maybe expr (\_ -> return (Bool True)) -- TODO: think about this 
 decl :: ParserState Ast
 decl = do
-    match [LET] expr $ \l -> do
+    match [LET] expr $ \t -> do
             assigns <- letAssigments
-            Ast l . LetBlock assigns <$> decl
+            Ast t . LetBlock assigns <$> decl
 
 expr :: ParserState Ast
-expr = logicalAnd
+expr = do 
+    left <- logicalAnd
+    match [SEMI_COLON] (return left) $
+        \t -> Ast t . Sequence left <$> expr
+
 --
 logicalAnd :: ParserState Ast
 logicalAnd = do
@@ -154,10 +166,22 @@ primary = do
         FALSE     -> return $ Ast token $ Bool False
         (Num n)   -> return $ Ast token $ Number n
         (Id name) -> return $ Ast token $ Var name
+        IF        -> do
+            condition <- expr
+            consume [THEN] "Expected 'then' after if condition."
+            body <- decl
+            elseBody <- match [ELSE] (return Nothing) (const $ Just <$> decl)
+            consume [END] "Expected 'end' at the end of the if then else declaration."
+
+            return $ Ast token $ If { condition, body, elseBody }
+
+        PRINT    -> Ast token . Unary value <$> expr
+        PRINTLN  -> Ast token . Unary value <$> expr
+
         _ -> do 
             modify (token:) -- put it bach to the top c:
             makeError "Expected an expression."
-        
+         
 
 -- Helper functions
 -- TODO: think about using MaybeT c:
@@ -165,10 +189,15 @@ match :: [TokenValue] -> ParserState a -> (Token -> ParserState a) -> ParserStat
 match expected ifNothing ifJust = do
     tokens <- get
     case tokens of 
-        (x@(Token value _ _ ):xs) | value `elem` expected -> do
+        (x@(Token value _ _ ):xs) |  any (same value) expected -> do
             put xs
             ifJust x
         _ -> ifNothing
+
+    where
+        same (Num _) (Num _) = True
+        same (Id _) (Id _)   = True
+        same x y = x == y
 
 consume :: [TokenValue] -> String -> ParserState Token
 consume expected msg = do
@@ -197,8 +226,8 @@ match :: TokenValue -> MaybeParseState Token
 match expected = do
     tokens <- get
     case tokens of 
-      (x@(Token value _ _):xs) -> do
-        guard (value == expected)
+      (x @ Token { value }:xs) -> do
+        guard (value `same` expected)
         put xs
         return x
       _ -> guard False
