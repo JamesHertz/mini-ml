@@ -58,7 +58,7 @@ runInterpreter = do
                 Left err -> putStrLn $ formatErr line err
                 Right value -> do 
                     value' <- value -- FIXME: decide what to do with this c:
-                    putStrLn $ "\n=> " ++ show value' -- this will only happen for REPL
+                    putStrLn $ " : " ++ show value' -- this will only happen for REPL
             prompt
 
 -- FIXME: later c:

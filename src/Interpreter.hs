@@ -8,6 +8,7 @@ import Scanner (TokenValue(..))
 import qualified Data.Map as Map
 import Control.Monad (foldM)
 import System.IO (hFlush, stdout)
+import Data.IntMap (insert)
 
 type Enviroment = Map.Map String Value
 data Value = IntValue Int | BoolValue Bool | UnitValue deriving (Eq)
@@ -15,6 +16,46 @@ instance Show Value where
     show (IntValue  x) = show x
     show (BoolValue x) = show x
     show UnitValue     = "()"
+
+
+{-
+ 
+type Address = Int
+data Value = 
+      IntValue Int 
+    | BoolValue Bool
+    | UnitValue
+    | Ref Address
+
+-- data MemoryCells = Map.Map Address Value
+
+data RefCell = {
+    value    :: Value,
+    refCount :: Int
+}
+
+data MemoryCells = Map.Map Address RefCell
+
+THINK: 
+    - How to do garbage collector??
+    - How to handle null refs ?
+
+
+type InterpreterState = State MemoryCells
+
+eval' :: Ast -> Enviroment -> InterpreterState (IO Value)
+eval' Ast { node = Unary NEW value } env = do
+    result  <- eval' value env
+    address <- insertCell value
+    return . return . Ref $ address
+    
+insertCell :: Value -> InterpreterState Address
+insertCell value = do 
+    address <- nexAddress
+    modify ....
+    return address
+    
+-}
 
 eval :: Ast -> IO Value
 eval ast = eval' ast Map.empty
