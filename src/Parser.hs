@@ -47,20 +47,19 @@ type ParserState = ExceptT Error (State [Token])
 
 {-
 Context free grammar:
+
 <program>    ::=  <decl> EOF
-<decl>       ::= <letDecl> | <expr> 
-<expr>       ::= <logicalAnd> (";" <logicalAnd> )*
-<logicalAnd> ::= <logicalOr>  ( "&&" <logicalOr> )*
+<decl>       ::= "let" ( Id (":"<type>)? "=" <expr> )+ "in" <decl> | <sequence> 
+<sequence>   ::= <expr> (";" <expr> )*
+<expr>       ::= <logicalOr>  ( "&&" <logicalOr> )*
 <logicalOr>  ::= <comparison> ( "||" <comparison>)*
 <comparison> ::= <term>  (( ">" | "<" | "==" | "!=" | ">=" | "<=" ) <term> )*
 <term>       ::= <factor> (( "+" | "-" ) <factor>  )*
 <factor>     ::= <primary> (( "*" | "/" ) <primary> )*
-<unary>      ::= ("-"|"~") <unary> | <primary>
-<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | ID | <ifExpr> | <printExpr> 
-<ifExpr>     ::= "if" <expr> "then" <decl> ("else" <decl>)? "end"
+<unary>      ::= ("-"|"~") <unary> | ("print" | "println")? <primary>
+<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | ID | <ifExpr>
 
-<letDecl>    ::= "let" ( Id (":"<type>)? "=" <expr> )+ "in" <decl>
-<printExpr>  ::= ( "print" | "println" ) <expr> 
+<ifExpr>     ::= "if" <expr> "then" <decl> ("else" <decl>)? "end"
 
 -- helpers c:
 <type>       ::=  INT | BOOL | UNIT
@@ -102,22 +101,22 @@ letAssigments = do
 -- decl = match [LET] >>= maybe expr (\_ -> return (Bool True)) -- TODO: think about this 
 decl :: ParserState Ast
 decl = do
-    match [LET] expr $ \t -> do
+    match [LET] Parser.sequence $ \t -> do
             assigns <- letAssigments
             Ast t . LetBlock assigns <$> decl
 
-expr :: ParserState Ast
-expr = do 
-    left <- logicalAnd
+sequence :: ParserState Ast 
+sequence = do 
+    left <- expr 
     match [SEMI_COLON] (return left) $
-        \t -> Ast t . Sequence left <$> expr
+        \t -> Ast t . Sequence left <$> Parser.sequence
 
 --
-logicalAnd :: ParserState Ast
-logicalAnd = do
+expr :: ParserState Ast
+expr = do
     left  <- logicalOr -- TODO: think about using flip c:
     match [AND] (return left) $ 
-        \t -> Ast t . Binary left (value t) <$> logicalAnd
+        \t -> Ast t . Binary left (value t) <$> expr
 --
 -- -- maybe (return left) (\t -> Binary left t <$> logicalAnd) token -- TODO: think about this
 logicalOr :: ParserState Ast
@@ -146,8 +145,10 @@ factor = do
 
 unary :: ParserState Ast
 unary = do
-    match [MINUS, NOT] primary $ 
-        \t -> Ast t . Unary (value t) <$> unary 
+    match [MINUS, NOT] (
+        match [PRINT, PRINTLN] primary $
+                \t -> Ast t . Unary (value t) <$> primary
+       ) $ \t -> Ast t . Unary (value t) <$> unary
 
 primary :: ParserState Ast
 primary = do
@@ -174,9 +175,6 @@ primary = do
             consume [END] "Expected 'end' at the end of the if then else declaration."
 
             return $ Ast token $ If { condition, body, elseBody }
-
-        PRINT    -> Ast token . Unary value <$> expr
-        PRINTLN  -> Ast token . Unary value <$> expr
 
         _ -> do 
             modify (token:) -- put it bach to the top c:
