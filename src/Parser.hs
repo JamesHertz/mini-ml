@@ -78,7 +78,7 @@ parse' = do
 parseType :: ParserState (Maybe TypeContext)
 parseType = do
     match [COLON] (return Nothing) $ \_ -> do
-        typeToken <- consume [INT, BOOL, UNIT] "Expected either 'int', 'bool', or 'unit' type."
+        typeToken <- consume [INT, BOOL, UNIT] "Invalid type! Expected either 'int', 'bool', or 'unit'."
         return $ Just (convert $ value typeToken, typeToken)
     where
         convert INT  = IntType

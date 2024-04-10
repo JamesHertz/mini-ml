@@ -19,8 +19,23 @@ main =  do
     args <- getArgs
     case args of
         [] -> putStrLn "Running the interpreter" >> runInterpreter
+        ("editor":_) -> editorMode
         (flag:_) | flag `elem` ["-h", "--help"] -> usage
         (filename:_) -> compileFile filename
+
+editorMode :: IO ()
+editorMode = 
+    handle editorHandler $ do
+        putStrLn "------------"
+        txt <- getContents
+        case interpretProgram txt of
+            Left err -> putStrLn $ formatErr txt err
+            Right value -> do 
+                value' <- value -- FIXME: decide what to do with this c:
+                putStrLn $ " : " ++ show value' -- this will only happen for REPL
+    where 
+        editorHandler :: IOError -> IO ()
+        editorHandler _ = editorMode
 
 
 compileFile :: String -> IO ()
