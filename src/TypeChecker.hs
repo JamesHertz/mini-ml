@@ -120,7 +120,7 @@ checkEquals Ast { token, node = Binary left _ right }  env =  do
     if left' == right' 
         then return BoolType
     -- TODO: think about the posibility of displaying the positions of the others types
-    else makeError token $ "Expected two 'boolean' type or two 'integer' type but found: '" 
+    else makeError token $ "Expected two equal type but found: '" 
                               ++ show left' ++ "' type and '" ++ show right' ++ "' type."
 
 makeError :: Token -> String -> Result a
