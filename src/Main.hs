@@ -4,7 +4,7 @@ import Serializer
 import Core
 import Errors
 
-import Control.Monad (unless)
+import Control.Monad (unless, foldM_)
 import System.IO (hFlush, stdout, hGetContents, openTempFile, hPutStrLn, stderr, print, hPutStr, hClose)
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
@@ -26,8 +26,15 @@ main =  do
 editorMode :: IO ()
 editorMode = 
     handle editorHandler $ do
-        putStrLn "------------"
+        putStrLn "Editor on, please just write some code and use CTRL+D to signal that you have finished.\n"
+        printLineNr 1
         txt <- getContents
+        foldM_ (\nr _ -> do 
+                printLineNr nr
+                return $ nr + 1
+            ) 2 $ lines txt
+
+        putStrLn "\n"
         case interpretProgram txt of
             Left err -> putStrLn $ formatErr txt err
             Right value -> do 
@@ -36,6 +43,16 @@ editorMode =
     where 
         editorHandler :: IOError -> IO ()
         editorHandler _ = editorMode
+        printLineNr :: Int -> IO ()
+        printLineNr nr  = do 
+            let 
+                lineNr = show nr
+                rem    = 3 - length lineNr
+                str    = if rem <= 0 then lineNr
+                         else replicate rem ' ' ++ lineNr
+            putStr $ str ++ " | "
+            hFlush stdout
+            
 
 
 compileFile :: String -> IO ()
