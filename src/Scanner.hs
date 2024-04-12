@@ -6,7 +6,7 @@ module Scanner (
 
 import qualified Data.Map as Map
 import Data.Char (isDigit, isAlpha, isAlphaNum, isSpace)
-import Control.Monad.State (State, evalState, get, modify, put, gets, MonadTrans (lift))
+import Control.Monad.State (State, evalState, get, modify, put, gets )
 import Errors
 import Data.Maybe (fromMaybe)
 import Control.Monad.Except (ExceptT, runExceptT)
@@ -57,6 +57,12 @@ data TokenValue =
     | EOF
  deriving (Show, Ord, Eq)
 
+data Token = Token { 
+    value    :: TokenValue,
+    line     :: Int, 
+    position :: Int 
+ } deriving (Show, Eq)
+
 reservedKeywors :: Map.Map String TokenValue
 reservedKeywors = Map.fromList [ 
      ("true", TRUE),
@@ -77,13 +83,6 @@ reservedKeywors = Map.fromList [
      ("println", PRINTLN)
     ]
 
-data Token = Token { 
-    value    :: TokenValue,
-    line     :: Int, 
-    position :: Int 
- } deriving (Show, Eq)
-
--- TODO: save the start of a line and update it whenever you make a new token c:
 data Context = Context {
     source        :: String,
     currLine      :: Int,
@@ -91,7 +90,6 @@ data Context = Context {
     startPosition :: Int
   }
 
--- type ScannerState = State Context
 type ScannerState = ExceptT Error (State Context)
 
 tokenize :: String -> Result [Token]
@@ -138,13 +136,15 @@ tokenize' = do
                    '|' -> consume '|' OR  "Expected another '|'."
                    '&' -> consume '&' AND "Expected another '&'."
 
-                   x | isAlpha x -> join x >>= identifier 
+                   x | isAlpha x || x == '_' 
+                       -> join x >>= identifier 
                    x | isDigit x -> join x >>= number
                    _   -> makeError $ "Unexpected symbol: " ++ [char]
         token <- makeToken value 
         rest  <- tokenize'
         return $ token : rest
         where
+            -- FIXME: find a better name for this function
             -- joins char with the rest of the characters of the source c:
             join char = gets $ \Context { source } -> char : source
 
@@ -213,13 +213,14 @@ number txt = do
 identifier :: String -> ScannerState TokenValue
 identifier txt = do
   let 
-    (word, rest) = span isAlphaNum txt
+    (word, rest) = span isIdentChar txt
     positions    = length word - 1 -- because one char was already consumed by the caller
     value        = fromMaybe (Id word) $ Map.lookup word reservedKeywors
   updateCtx rest 0 positions
   return value
+  where 
+    isIdentChar x = x == '_' || isAlphaNum x
 
--- why don't I need a lift??
 updateCtx :: String -> Int -> Int -> ScannerState ()
 updateCtx newSource lineDiff posDiff = 
     modify $ \ Context { currLine, currPosition, startPosition } -> Context { 

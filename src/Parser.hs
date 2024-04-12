@@ -87,16 +87,18 @@ parseType = do
         
 letAssigments :: ParserState [Assigment]
 letAssigments = do
-    token  <- consume [Id ""] "Expected and indentifier after 'let' keyword."
+    token <- consume [Id ""] "Expected and indentifier after 'let' keyword."
     expectedType <- parseType
     consume [EQ'] "Expected '=' after variable name."
     assignValue  <- expr
 
     let 
-        (Token (Id varName) _ _) = token
-        assign    = Assigment { varName, expectedType, assignValue }
+        Token { value = Id varName } = token
+        assign = Assigment { varName, expectedType, assignValue }
 
-    match [IN] ((assign:) <$> letAssigments) $ \_ -> return [assign]
+    case'  [IN]    (const $ return [assign]) $
+     case' [Id ""] (const $ (assign:) <$> letAssigments) $ 
+        makeError "Expected 'in' after variable declaration."
 
 -- decl = match [LET] >>= maybe expr (\_ -> return (Bool True)) -- TODO: think about this 
 decl :: ParserState Ast
@@ -111,20 +113,18 @@ sequence = do
     match [SEMI_COLON] (return left) $
         \t -> Ast t . Sequence left <$> Parser.sequence
 
---
 expr :: ParserState Ast
 expr = do
     left  <- logicalOr -- TODO: think about using flip c:
     match [AND] (return left) $ 
         \t -> Ast t . Binary left (value t) <$> expr
---
--- -- maybe (return left) (\t -> Binary left t <$> logicalAnd) token -- TODO: think about this
+
 logicalOr :: ParserState Ast
 logicalOr = do
     left  <- comparison
     match [OR] (return left) $ 
         \t -> Ast t . Binary left (value t) <$> logicalOr
---
+
 comparison :: ParserState Ast
 comparison = do
     left  <- term 
@@ -144,29 +144,25 @@ factor = do
         \t -> Ast t . Binary left (value t) <$> factor
 
 unary :: ParserState Ast
-unary = do
-    match [MINUS, NOT] (
-        match [PRINT, PRINTLN] primary $
-                \t -> Ast t . Unary (value t) <$> primary
-       ) $ \t -> Ast t . Unary (value t) <$> unary
+unary = do -- TODO: think about this
+    match [MINUS, NOT, PRINT, PRINTLN] primary $
+       \t -> Ast t . Unary (value t) <$> unary
 
 primary :: ParserState Ast
 primary = do
     token <- gets customHead
     modify customTail
-    let (Token value _ _ ) = token
-    case value of 
-        LEFT_PAREN -> do
-            match [RIGHT_PAREN] (do
+    case value token of 
+        LEFT_PAREN -> 
+            case' [RIGHT_PAREN] (return . (`Ast` Unit)) $ do
                 res <- expr
                 consume [RIGHT_PAREN] "Missing enclosing ')'."
                 return res
-             ) $ \_ -> return $ Ast token Unit
-                
-        TRUE      -> return $ Ast token $ Bool True
-        FALSE     -> return $ Ast token $ Bool False
-        (Num n)   -> return $ Ast token $ Number n
-        (Id name) -> return $ Ast token $ Var name
+
+        TRUE      -> return . Ast token $ Bool True
+        FALSE     -> return . Ast token $ Bool False
+        (Num n)   -> return . Ast token $ Number n
+        (Id name) -> return . Ast token $ Var name
         IF        -> do
             condition <- expr
             consume [THEN] "Expected 'then' after if condition."
@@ -174,15 +170,17 @@ primary = do
             elseBody <- match [ELSE] (return Nothing) (const $ Just <$> decl)
             consume [END] "Expected 'end' at the end of the if then else declaration."
 
-            return $ Ast token $ If { condition, body, elseBody }
+            return . Ast token $ If { condition, body, elseBody }
 
         _ -> do 
             modify (token:) -- put it bach to the top c:
             makeError "Expected an expression."
          
 
--- Helper functions
 -- TODO: think about using MaybeT c:
+case' :: [TokenValue] -> (Token -> ParserState a) -> ParserState a -> ParserState a
+case' expected = flip $ match expected 
+
 match :: [TokenValue] -> ParserState a -> (Token -> ParserState a) -> ParserState a -- ParserState (Maybe Token)
 match expected ifNothing ifJust = do
     tokens <- get
@@ -200,7 +198,6 @@ match expected ifNothing ifJust = do
 consume :: [TokenValue] -> String -> ParserState Token
 consume expected msg = do
     match expected (makeError msg) return
-    -- maybe (makeError msg) return token
 
 makeError :: String -> ParserState a
 makeError msg = do

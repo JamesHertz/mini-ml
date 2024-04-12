@@ -13,6 +13,11 @@ import System.Process (rawSystem)
 import Control.Exception (try, handle)
 import System.IO.Error (isDoesNotExistError)
 
+-- constants
+lineNumberSize :: Int
+lineNumberSize = 4
+
+
 -- TODO: make this better c:
 main :: IO ()
 main =  do
@@ -36,24 +41,23 @@ editorMode =
 
         putStrLn "\n"
         case interpretProgram txt of
-            Left err -> putStrLn $ formatErr txt err
+            Left err    -> putStrLn $ formatErr txt err
             Right value -> do 
-                value' <- value -- FIXME: decide what to do with this c:
+                value' <- value
                 putStrLn $ " : " ++ show value' -- this will only happen for REPL
     where 
         editorHandler :: IOError -> IO ()
         editorHandler _ = editorMode
+
         printLineNr :: Int -> IO ()
         printLineNr nr  = do 
             let 
                 lineNr = show nr
-                rem    = 3 - length lineNr
+                rem    = lineNumberSize - length lineNr
                 str    = if rem <= 0 then lineNr
                          else replicate rem ' ' ++ lineNr
             putStr $ str ++ " | "
             hFlush stdout
-            
-
 
 compileFile :: String -> IO ()
 compileFile filename =
@@ -78,13 +82,13 @@ compileFile filename =
             |  isDoesNotExistError e = printError $ "File '" ++ filename ++ "' not file."
             |  otherwise = printError $ "Unexpected error: " ++ show e
 
-
 runInterpreter :: IO ()
 runInterpreter = do
     prompt
     txt <- getContents
     mapM_ interpret $ lines txt
     where
+        prompt = putStr ">> " >> hFlush stdout
         interpret line = do
             case interpretProgram line of
                 Left err -> putStrLn $ formatErr line err
@@ -102,13 +106,10 @@ printError msg = do
 usage :: IO a
 usage = do
     name <- getProgName
+    -- TODO: use a better error message
     hPutStrLn stderr $ "Usage: " ++ name ++ " [-h|--help] FILE\n"
     hPutStrLn stderr "\
 \If a file is provided it will compile it and produce a jvm execultable file. But if none\ 
 \ is provided it will just run the interpreter REPL."
     exitFailure
 
-prompt :: IO ()
-prompt = do
-    putStr ">> "
-    hFlush stdout
