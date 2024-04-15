@@ -105,7 +105,8 @@ letAssigments = do
         assign = Assigment { varName, expectedType, assignValue }
 
     case'  [IN]    (const $ return [assign]) $
-     case' [Id ""] (const $ (assign:) <$> letAssigments) $  -- TODO: fix this c:
+     -- TODO: think if there is a need for a check function
+     case' [Id ""] (\t -> modify (t:) >> (assign:) <$> letAssigments) $  -- TODO: fix this c:
         makeError "Expected 'in' after variable declaration."
 
 -- decl = match [LET] >>= maybe expr (\_ -> return (Bool True)) -- TODO: think about this 
