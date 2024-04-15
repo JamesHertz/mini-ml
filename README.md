@@ -22,3 +22,4 @@ For the first time you might want to run `./bin/main --help` go get a feel of ho
 - [x] Functions print and println
 - [x] Semi-colon expressions c:
 - [ ] References things (`new`, `!` and `ref` type)
+- [ ] Add strings c:

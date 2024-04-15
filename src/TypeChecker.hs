@@ -10,14 +10,15 @@ import qualified Data.Map as Map
 import Control.Monad (foldM)
 import Errors  
 
-data Type = IntType | BoolType | UnitType deriving (Eq)
+data Type = IntType | BoolType | UnitType | RefType Type deriving (Eq)
 
 type TypeEnv = Map.Map String Type
 
 instance Show Type where
-    show IntType  = "integer"
-    show BoolType = "boolean"
-    show UnitType = "unit"
+    show IntType       = "integer"
+    show BoolType      = "boolean"
+    show UnitType      = "unit"
+    show (RefType typ) = "reference of " ++ show typ
 
 typeCheck :: Ast -> Result Type
 typeCheck ast = typeCheck' ast Map.empty

@@ -28,10 +28,13 @@ data TokenValue =
     | GT_EQ 
     | LT'
     | LT_EQ 
+    -- ref assigment
+    | ASSIGN
     -- single character
     | NOT   -- tild (~)
     | COLON -- (:)
     | SEMI_COLON
+    | BANG  -- (!)
     -- keywords
     | TRUE
     | FALSE
@@ -43,10 +46,12 @@ data TokenValue =
     | END
     | PRINT
     | PRINTLN
+    | NEW
     -- types c:
     | BOOL
     | INT
     | UNIT
+    | REF
     -- parenthesis
     | LEFT_PAREN
     | RIGHT_PAREN 
@@ -80,7 +85,11 @@ reservedKeywors = Map.fromList [
      ("unit", UNIT),
 
      ("print", PRINT),
-     ("println", PRINTLN)
+     ("println", PRINTLN),
+
+     -- references tokens
+     ("ref", REF),
+     ("new", NEW)
     ]
 
 data Context = Context {
@@ -123,16 +132,15 @@ tokenize' = do
 
                    -- other single chars
                    '~' -> return NOT
-                   ':' -> return COLON
                    ';' -> return SEMI_COLON
 
-                   -- comparison
+                   -- comparison & refs tokens
                    '>' -> match '=' GT_EQ GT' 
                    '<' -> match '=' LT_EQ LT'
                    '=' -> match '=' EQ_EQ EQ'
-                   -- '!' -> match '=' N_EQ BANG -- FIXME: uncomment me in the Future c:
+                   '!' -> match '=' N_EQ BANG
+                   ':' -> match '=' ASSIGN COLON
 
-                   '!' -> consume '=' N_EQ "Expected '=' after '!'." -- FIXME: delete me in the future c:
                    '|' -> consume '|' OR  "Expected another '|'."
                    '&' -> consume '&' AND "Expected another '&'."
 

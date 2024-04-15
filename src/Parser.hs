@@ -15,6 +15,8 @@ import Data.Maybe (isNothing)
 import Scanner 
 import Control.Monad.Trans.Except (throwE)
 
+import Data.List (intercalate)
+
 import qualified Data.List.NonEmpty as List
 
 type TypeToken   = Token
@@ -34,6 +36,7 @@ data AstNode =
             Binary   Ast TokenValue Ast
           | Unary    TokenValue Ast 
           | LetBlock [Assigment] Ast
+          | RefAssigment Ast Ast
           | If { condition :: Ast, body :: Ast, elseBody :: Maybe Ast }
           | Var      String
           | Number   Int
@@ -50,19 +53,20 @@ Context free grammar:
 
 <program>    ::=  <decl> EOF
 <decl>       ::= "let" ( Id (":"<type>)? "=" <expr> )+ "in" <decl> | <sequence> 
-<sequence>   ::= <expr> (";" <expr> )*
+<sequence>   ::= <assigment> (";" <sequence>)*
+<assigment>  ::= <expr> (":=" <assigment>)*
 <expr>       ::= <logicalOr>  ( "&&" <logicalOr> )*
 <logicalOr>  ::= <comparison> ( "||" <comparison>)*
 <comparison> ::= <term>  (( ">" | "<" | "==" | "!=" | ">=" | "<=" ) <term> )*
-<term>       ::= <factor> (( "+" | "-" ) <factor>  )*
-<factor>     ::= <primary> (( "*" | "/" ) <primary> )*
-<unary>      ::= ("-"|"~") <unary> | ("print" | "println")? <primary>
-<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | ID | <ifExpr>
+<term>       ::= <factor> (( "+" | "-" ) <term>  )*
+<factor>     ::= <primary> (( "*" | "/" ) <factor> )*
+<unary>      ::= ("-"|"~"|"!"|"new") <unary> | <primary>
+<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | ID | <ifExpr> | <printExpr>
 
+<printExpr>  ::= ("print" | "println") <expr>
 <ifExpr>     ::= "if" <expr> "then" <decl> ("else" <decl>)? "end"
 
--- helpers c:
-<type>       ::=  INT | BOOL | UNIT
+<type>       ::=  "int" | "bool" | "unit" | "ref" <type>
 -}
 
 parse :: [Token] -> Result Ast
@@ -75,11 +79,14 @@ parse' = do
     return ast
    
 -- TODO: think about using MaybeT
-parseType :: ParserState (Maybe TypeContext)
+parseType :: ParserState TypeContext
 parseType = do
-    match [COLON] (return Nothing) $ \_ -> do
-        typeToken <- consume [INT, BOOL, UNIT] "Invalid type! Expected either 'int', 'bool', or 'unit'."
-        return $ Just (convert $ value typeToken, typeToken)
+    case' [REF] (\token -> do 
+            subType <- parseType
+            return ( RefType $ fst subType, token)
+        ) $ do
+            typeToken <- consume [INT, BOOL, UNIT] "Invalid type! Expected either 'int', 'bool', or 'unit'."
+            return (convert $ value typeToken, typeToken)
     where
         convert INT  = IntType
         convert BOOL = BoolType  
@@ -88,7 +95,8 @@ parseType = do
 letAssigments :: ParserState [Assigment]
 letAssigments = do
     token <- consume [Id ""] "Expected and indentifier after 'let' keyword."
-    expectedType <- parseType
+    expectedType <- match [COLON] (return Nothing) $ const (Just <$> parseType)
+    
     consume [EQ'] "Expected '=' after variable name."
     assignValue  <- expr
 
@@ -97,7 +105,7 @@ letAssigments = do
         assign = Assigment { varName, expectedType, assignValue }
 
     case'  [IN]    (const $ return [assign]) $
-     case' [Id ""] (const $ (assign:) <$> letAssigments) $ 
+     case' [Id ""] (const $ (assign:) <$> letAssigments) $  -- TODO: fix this c:
         makeError "Expected 'in' after variable declaration."
 
 -- decl = match [LET] >>= maybe expr (\_ -> return (Bool True)) -- TODO: think about this 
@@ -109,9 +117,17 @@ decl = do
 
 sequence :: ParserState Ast 
 sequence = do 
-    left <- expr 
+    left <- assigment 
     match [SEMI_COLON] (return left) $
         \t -> Ast t . Sequence left <$> Parser.sequence
+
+
+assigment :: ParserState Ast
+assigment = do
+    left <- expr 
+    match [ASSIGN] (return left) $
+        \t -> Ast t . RefAssigment left <$> assigment 
+    
 
 expr :: ParserState Ast
 expr = do
@@ -129,7 +145,7 @@ comparison :: ParserState Ast
 comparison = do
     left  <- term 
     match [ GT', LT', GT_EQ, LT_EQ, EQ_EQ, N_EQ ] (return left) $ 
-            \t -> Ast t . Binary left (value t) <$> comparison
+            \t -> Ast t . Binary left (value t) <$> term
 
 term :: ParserState Ast
 term = do
@@ -145,7 +161,7 @@ factor = do
 
 unary :: ParserState Ast
 unary = do -- TODO: think about this
-    match [MINUS, NOT, PRINT, PRINTLN] primary $
+    match [MINUS, NOT, NEW, BANG] primary $
        \t -> Ast t . Unary (value t) <$> unary
 
 primary :: ParserState Ast
@@ -171,6 +187,8 @@ primary = do
             consume [END] "Expected 'end' at the end of the if then else declaration."
 
             return . Ast token $ If { condition, body, elseBody }
+
+        x | x `elem` [PRINT, PRINTLN] -> Ast token . Unary x <$> expr 
 
         _ -> do 
             modify (token:) -- put it bach to the top c:
