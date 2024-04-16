@@ -3,73 +3,60 @@ module Interpreter (
     eval,
 )where
 
+-- import Numeric (showIntAtBase)
 import Parser ( Ast(..), AstNode(..), Token(..), Assigment(..)  )
 import Scanner (TokenValue(..))
 import qualified Data.Map as Map
 import Control.Monad (foldM)
+import Control.Monad.State (StateT, evalStateT, liftIO, gets, modify)
 import System.IO (hFlush, stdout)
 import Data.IntMap (insert)
+import Data.Bifunctor (second)
 
-type Enviroment = Map.Map String Value
-data Value = IntValue Int | BoolValue Bool | UnitValue deriving (Eq)
+type Enviroment  = Map.Map String Value
+
+type Address     = Int
+type MemoryCells = Map.Map Address Value
+
+data Value = IntValue Int | BoolValue Bool | Ref Address | UnitValue  deriving (Eq)
 instance Show Value where
     show (IntValue  x) = show x
     show (BoolValue x) = show x
+    show (Ref x)       = "Ref ..." -- TODO: later make this cool c: 
     show UnitValue     = "()"
 
 
-{-
- 
-type Address = Int
-data Value = 
-      IntValue Int 
-    | BoolValue Bool
-    | UnitValue
-    | Ref Address
-
--- data MemoryCells = Map.Map Address Value
-
-data RefCell = {
-    value    :: Value,
-    refCount :: Int
-}
-
-data MemoryCells = Map.Map Address RefCell
-
-THINK: 
-    - How to do garbage collector??
-    - How to handle null refs ?
-
-
-type InterpreterState = State MemoryCells
-
-eval' :: Ast -> Enviroment -> InterpreterState (IO Value)
-eval' Ast { node = Unary NEW value } env = do
-    result  <- eval' value env
-    address <- insertCell value
-    return . return . Ref $ address
-    
-insertCell :: Value -> InterpreterState Address
-insertCell value = do 
-    address <- nexAddress
-    modify ....
-    return address
-    
--}
+type EvalState = StateT (Address, MemoryCells) IO
 
 eval :: Ast -> IO Value
-eval ast = eval' ast Map.empty
+eval ast = evalStateT (eval' ast Map.empty) (0, Map.empty)
 
-eval' :: Ast -> Enviroment -> IO Value
-
--- TODO: make check more generic so you can use it for this c:
--- values
+eval' :: Ast -> Enviroment -> EvalState Value
 eval' Ast { node = Number x } env = return $ IntValue x
 eval' Ast { node = Bool x }   env = return $ BoolValue x
 eval' Ast { node = Unit }     env = return UnitValue
--- arithmetic
-eval' Ast { node = Unary MINUS value } env = IntValue . negate <$> evalInt value env
 
+-- unaries
+eval' Ast { node = Unary MINUS value } env = IntValue . negate <$> evalInt value env
+eval' Ast { node = Unary NOT expr    } env = BoolValue . not <$> evalBool expr env
+eval' Ast { node = Unary NEW value   } env = eval' value env >>= reserveCell
+eval' Ast { node = Unary BANG value  } env = do 
+    result <- eval' value env 
+    let (Ref address) = result
+    getValue address
+
+eval' Ast { node = Unary PRINT value } env = do
+    result <- eval' value env
+    liftIO $ putStr $ show result
+    liftIO $ hFlush stdout
+    return UnitValue
+
+eval' Ast { node = Unary PRINTLN value } env = do
+    result <- eval' value env
+    liftIO $ print result
+    return UnitValue
+
+-- Binaries
 eval' ast@Ast { node = Binary left PLUS right  } env = evalBinary evalInt (+) IntValue ast env
 eval' ast@Ast { node = Binary left MINUS right } env = evalBinary evalInt (-) IntValue ast env
 eval' ast@Ast { node = Binary left SLASH right } env = evalBinary evalInt div IntValue ast env
@@ -82,10 +69,12 @@ eval' ast@Ast { node = Binary left  GT'  right } env = evalBinary evalInt (>)  B
 eval' ast@Ast { node = Binary left  LT'  right } env = evalBinary evalInt (<)  BoolValue ast env
 eval' ast@Ast { node = Binary left GT_EQ right } env = evalBinary evalInt (>=) BoolValue ast env
 eval' ast@Ast { node = Binary left LT_EQ right } env = evalBinary evalInt (<=) BoolValue ast env
+
+-- FIXME: and and or should not evaluate both sides always
 eval' ast@Ast { node = Binary left OR  right } env = evalBinary evalBool (||) BoolValue ast env
 eval' ast@Ast { node = Binary left AND right } env = evalBinary evalBool (&&) BoolValue ast env
-eval' Ast { node = Unary NOT expr } env = BoolValue . not <$> evalBool expr env
 
+-- dealing with identifiers
 eval' Ast { node = LetBlock assigns body } env = do
      newEnv <- foldM mapFunc env assigns
      eval' body newEnv
@@ -109,32 +98,48 @@ eval' Ast { node = Sequence fst snd } env = do
     eval' fst env
     eval' snd env
 
+eval' Ast { node = RefAssignment ref value } env = do
+    result <- eval' ref env
+    value' <- eval' value env
 
-eval' Ast { node = Unary PRINT value } env = do
-    result <- eval' value env
-    putStr $ show result
-    hFlush stdout
-    return UnitValue
+    let (Ref address) = result
+    setValue address value'
+    return value'
 
-eval' Ast { node = Unary PRINTLN value } env = do
-    result <- eval' value env
-    print result
-    return UnitValue
+-- memory helper functions
+reserveCell :: Value -> EvalState Value
+reserveCell value = do
+    address <- gets fst
+    modify $ \(_, map) -> (address + 1, Map.insert address value map)
+    return $ Ref address
+
+getValue :: Address -> EvalState Value
+getValue address = do
+    cell <- gets (Map.lookup address . snd)
+    case cell of
+        Just value -> return value
+        Nothing -> error $ "BUG couldn't get value for: " ++ show address
+
+-- TODO: think if it is worthed to use the suggestion c:
+setValue :: Address -> Value -> EvalState ()
+setValue address value = modify $ second (Map.insert address value)
+    
+
 
 -- helper functions
-evalBinary :: (Ast -> Enviroment -> IO a) -> (a -> a -> b) -> (b -> c) -> Ast -> Enviroment -> IO c
+evalBinary :: (Ast -> Enviroment -> EvalState a) -> (a -> a -> b) -> (b -> c) -> Ast -> Enviroment -> EvalState c
 evalBinary evaluator operation wrapper Ast { node = Binary left _ right } env = do
     left'  <- evaluator left env
     right' <- evaluator right env
     return $ wrapper $ left' `operation` right'
 
-evalInt :: Ast -> Enviroment -> IO Int 
+evalInt :: Ast -> Enviroment -> EvalState Int 
 evalInt ast env = do
     value <- eval' ast env
     let (IntValue result) = value
     return result
 
-evalBool :: Ast -> Enviroment -> IO Bool
+evalBool :: Ast -> Enviroment -> EvalState Bool
 evalBool ast env = do
     value <- eval' ast env
     let (BoolValue result) = value

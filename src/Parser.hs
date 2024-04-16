@@ -19,6 +19,53 @@ import Data.List (intercalate)
 
 import qualified Data.List.NonEmpty as List
 
+{-
+
+AstNodes formally ...
+
+-- Unary nodes
+Unary MINUS    _
+Unary NOT      _
+Unary PRINTLN  _ 
+Unary PRINT    _ 
+Unary NEW      _ 
+Unary BANG     _ 
+
+-- binary nodes
+
+-- arithmetic operators
+Binary _ PLUS  _
+Binary _ MINUS _
+Binary _ TIMES _
+Binary _ SLASH _
+
+-- logical operators
+Binary _ AND _
+Binary _ OR  _
+
+-- comparison operatos 
+Binary _  GT'  _
+Binary _  LT'  _
+Binary _ GT_EQ _
+Binary _ LT_EQ _
+Binary _ EQ_EQ _
+Binary _ N_EQ  _
+
+-- special nodes
+
+LetBlock _ _
+RefAssignment _
+If { condition, body, elsebody }
+Sequence _ _ 
+
+-- primary nodes
+Number _ 
+Bool   _ 
+Var    _
+Unit 
+
+ -}
+
 type TypeToken   = Token
 type TypeContext = (Type, TypeToken)
 
@@ -29,12 +76,11 @@ data Assigment = Assigment {
 } deriving (Show, Eq)
 
 data Ast = Ast { token :: Token, node :: AstNode } deriving (Eq, Show)
-
 data AstNode = 
             Binary   Ast TokenValue Ast
           | Unary    TokenValue Ast 
           | LetBlock [Assigment] Ast
-          | RefAssigment Ast Ast
+          | RefAssignment Ast Ast
           | If { condition :: Ast, body :: Ast, elseBody :: Maybe Ast }
           | Var      String
           | Number   Int
@@ -112,8 +158,9 @@ decl :: ParserState Ast
 decl = do
     match [LET] Parser.sequence $ \t -> do
             assigns <- letAssigments
+            result  <- Ast t . LetBlock assigns <$> decl
             consume [END] "Expected 'end' at the end of a let block."
-            Ast t . LetBlock assigns <$> decl
+            return result
 
 sequence :: ParserState Ast 
 sequence = do 
@@ -126,7 +173,7 @@ assigment :: ParserState Ast
 assigment = do
     left <- expr 
     match [ASSIGN] (return left) $
-        \t -> Ast t . RefAssigment left <$> assigment 
+        \t -> Ast t . RefAssignment left <$> assigment 
     
 
 expr :: ParserState Ast

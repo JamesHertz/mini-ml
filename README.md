@@ -15,12 +15,13 @@ For the first time you might want to run `./bin/main --help` go get a feel of ho
 - [ ] Look for better ways to design your CLI interface c:
 - [x] Think about storing information about places on the tokens (probaby coming up with a token type c:)
 - [ ] Think about the possibility of adding types `BinaryOp` and `UnaryOp` (to simplifly the code c:).
+- [ ] Add multi-error report
 
 # Features to implement
 - [x] If stamemt
-- [ ] Assigment
+- [x] Assigment
 - [ ] While loop
 - [x] Functions print and println
 - [x] Semi-colon expressions c:
-- [ ] References things (`new`, `!` and `ref` type)
+- [x] References things (`new`, `!` and `ref` type)
 - [ ] Add strings c:
