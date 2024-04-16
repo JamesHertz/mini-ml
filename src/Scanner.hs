@@ -47,6 +47,8 @@ data TokenValue =
     | PRINT
     | PRINTLN
     | NEW
+    | WHILE
+    | DO
     -- types c:
     | BOOL
     | INT
@@ -79,6 +81,8 @@ reservedKeywors = Map.fromList [
      ("then", THEN),
      ("else", ELSE),
      ("end", END),
+     ("while", WHILE),
+     ("do", DO),
 
      ("int", INT),
      ("bool", BOOL),

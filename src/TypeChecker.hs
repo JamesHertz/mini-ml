@@ -107,6 +107,10 @@ typeCheck' Ast { node = Sequence fst snd } env  = do
     typeCheck' fst env
     typeCheck' snd env
 
+typeCheck' Ast { node = While condition body } env  = do
+    checkValue condition env BoolType
+    typeCheck' body env
+    return UnitType
 
 -- Helper function c:
 -- TODO: make check more generic so you can use it for this c:

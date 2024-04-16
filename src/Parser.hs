@@ -86,6 +86,7 @@ data AstNode =
           | Number   Int
           | Bool     Bool
           | Sequence Ast Ast
+          | While    Ast Ast
           | Unit
          deriving (Eq, Show)
 
@@ -105,10 +106,12 @@ Context free grammar:
 <term>       ::= <factor> (( "+" | "-" ) <term>  )*
 <factor>     ::= <primary> (( "*" | "/" ) <factor> )*
 <unary>      ::= ("-"|"~"|"!"|"new") <unary> | <primary>
-<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | ID | <ifExpr> | <printExpr>
+<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | ID 
+                  | <ifExpr> | <printExpr> | <whileExpr>
 
 <printExpr>  ::= ("print" | "println") <expr>
 <ifExpr>     ::= "if" <expr> "then" <decl> ("else" <decl>)? "end"
+<whileExpr>  ::= "while" <expr> "do" <decl> "end"
 
 <type>       ::=  "int" | "bool" | "unit" | "ref" <type>
 -}
@@ -234,6 +237,13 @@ primary = do
             consume [END] "Expected 'end' at the end of the if then else declaration."
 
             return . Ast token $ If { condition, body, elseBody }
+
+        WHILE     -> do
+            condition <- expr
+            consume [DO] "Expected 'do' after while condition."
+            body <- decl
+            consume [END] "Expected 'end' at the end of while."
+            return . Ast token $ While condition body
 
         x | x `elem` [PRINT, PRINTLN] -> Ast token . Unary x <$> expr 
 

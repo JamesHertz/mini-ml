@@ -88,6 +88,16 @@ eval' Ast { node = Var name } env =
         Just value -> return value
         Nothing -> error "Something is wrong"
 
+eval' Ast { node = RefAssignment ref value } env = do
+    result <- eval' ref env
+    value' <- eval' value env
+
+    let (Ref address) = result
+    setValue address value'
+    return value'
+
+-- control flow
+
 eval' Ast { node = If { condition, body, elseBody } } env = do
     condValue <- evalBool condition env
     let resultValue = if condValue then eval' body env
@@ -98,13 +108,12 @@ eval' Ast { node = Sequence fst snd } env = do
     eval' fst env
     eval' snd env
 
-eval' Ast { node = RefAssignment ref value } env = do
-    result <- eval' ref env
-    value' <- eval' value env
-
-    let (Ref address) = result
-    setValue address value'
-    return value'
+eval' ast@Ast { node = While cond body } env = do
+    result <- evalBool cond env
+    if result then do
+        eval' body env
+        eval' ast env
+    else return UnitValue
 
 -- memory helper functions
 reserveCell :: Value -> EvalState Value
@@ -124,8 +133,6 @@ getValue address = do
 setValue :: Address -> Value -> EvalState ()
 setValue address value = modify $ second (Map.insert address value)
     
-
-
 -- helper functions
 evalBinary :: (Ast -> Enviroment -> EvalState a) -> (a -> a -> b) -> (b -> c) -> Ast -> Enviroment -> EvalState c
 evalBinary evaluator operation wrapper Ast { node = Binary left _ right } env = do
