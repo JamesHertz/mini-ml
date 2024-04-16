@@ -14,6 +14,7 @@ For the first time you might want to run `./bin/main --help` go get a feel of ho
 - [ ] Rename some tokens to improve code readability
 - [ ] Look for better ways to design your CLI interface c:
 - [x] Think about storing information about places on the tokens (probaby coming up with a token type c:)
+- [ ] Think about the possibility of adding types `BinaryOp` and `UnaryOp` (to simplifly the code c:).
 
 # Features to implement
 - [x] If stamemt

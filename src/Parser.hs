@@ -30,8 +30,6 @@ data Assigment = Assigment {
 
 data Ast = Ast { token :: Token, node :: AstNode } deriving (Eq, Show)
 
-type Condition = Ast
-type Body      = Ast
 data AstNode = 
             Binary   Ast TokenValue Ast
           | Unary    TokenValue Ast 
@@ -52,7 +50,7 @@ type ParserState = ExceptT Error (State [Token])
 Context free grammar:
 
 <program>    ::=  <decl> EOF
-<decl>       ::= "let" ( Id (":"<type>)? "=" <expr> )+ "in" <decl> | <sequence> 
+<decl>       ::= "let" ( Id (":"<type>)? "=" <expr> )+ "in" <decl> "end" | <sequence> 
 <sequence>   ::= <assigment> (";" <sequence>)*
 <assigment>  ::= <expr> (":=" <assigment>)*
 <expr>       ::= <logicalOr>  ( "&&" <logicalOr> )*
@@ -114,6 +112,7 @@ decl :: ParserState Ast
 decl = do
     match [LET] Parser.sequence $ \t -> do
             assigns <- letAssigments
+            consume [END] "Expected 'end' at the end of a let block."
             Ast t . LetBlock assigns <$> decl
 
 sequence :: ParserState Ast 
