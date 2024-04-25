@@ -151,7 +151,7 @@ tokenize' = do
                    x | isAlpha x || x == '_' 
                        -> join x >>= identifier 
                    x | isDigit x -> join x >>= number
-                   _   -> makeError $ "Unexpected symbol: " ++ [char]
+                   _   -> makeError $ "Unexpected symbol."
         token <- makeToken value 
         rest  <- tokenize'
         return $ token : rest

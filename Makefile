@@ -7,6 +7,12 @@ SRC   := $(wildcard src/*.hs)
 EXE   := $(BIN_DIR)/main
 FLAGS := 
 
+# on Arch linux ghc uses dynamic linking over static by default
+ifneq ("$(wildcard '/etc/arch-release'))","")
+	FLAGS += -dynamic
+endif
+
+
 all: $(EXE)
 
 $(EXE): $(SRC) $(HS_OBJ) | $(BIN_DIR)

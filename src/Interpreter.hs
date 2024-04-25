@@ -12,6 +12,7 @@ import Control.Monad.State (StateT, evalStateT, liftIO, gets, modify)
 import System.IO (hFlush, stdout)
 import Data.IntMap (insert)
 import Data.Bifunctor (second)
+import Text.Printf (printf)
 
 type Enviroment  = Map.Map String Value
 
@@ -22,7 +23,9 @@ data Value = IntValue Int | BoolValue Bool | Ref Address | UnitValue  deriving (
 instance Show Value where
     show (IntValue  x) = show x
     show (BoolValue x) = show x
-    show (Ref x)       = "Ref ..." -- TODO: later make this cool c: 
+-- TODO: when the program starts generate a random address to start with
+-- and on each step choose a range to get the next address.
+    show (Ref x)       = "Ref 0x" ++ printf "%x" x
     show UnitValue     = "()"
 
 
