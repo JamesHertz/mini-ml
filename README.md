@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # ICL-Project
 
 In this repository there is an implementation in haskell of the mini-ml programming language [*proposed*](assigment.pdf) as the first part of the pratical assigment of *ICL*. You will find a *typechecker*, *parser* and an *interpreter* for the language. There is also a *compiler* (only work for logical and arithmetic operations) but to use it you would need to change the code.
@@ -68,3 +69,6 @@ PLEASE IGNORE WHAT IS BELOW IT IS HERE FOR THE SOLE PURPOSE OF GUIDING US THROUG
 - [x] Semi-colon expressions c:
 - [x] References things (`new`, `!` and `ref` type)
 - [ ] Add strings c:
+=======
+[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/jXK-7um5)
+>>>>>>> deliver-p1/main
