@@ -1,17 +1,17 @@
 # ICL-Project
 
-In this repository there is an implementation in haskell of the mini-ml programming language [*proposed*](assigment.pdf) as the first part of the pratical assigment of *ICL*. You will find a *typechecker*, *parser* and an *interpreter* for the language. There is also a *compiler* (only work for logical and arithmetic operations) but to use it you would need to change the code.
+In this repository you will find an haskell's implementation of the portion of the micro-ml programming language [proposed](assigment.pdf) for the first part of the pratical assigment of **ICL**. You will find a **typechecker**, **parser** and an **interpreter** for the language. There is also a **compiler** (only work for logical and arithmetic operations) but to use it you would have to change the code.
 
 <!-- This is surely not complete but it works at some extent. Here you have an interpreter for a mini-caculator as well as a compiler for this mini calculator language to JVM. -->
 <!--  -->
 # Build & Run
-To build you will need to have `ghc` (haskell compiler) and `gnu make` installed. After making sure you have both installed you can just run `make`, at the root of the repo, which will out of the box drop off and executable named `bin/main`.
+To build you need to have `ghc` (haskell compiler) and `gnu make` installed. After making sure you have both installed you can just run `make`, at the root of the repo. This will out of the box drop an executable named `bin/main`.
 
 The program works as required by the professor. When provided with an argument it tries to find a file with such name and it parses, typecheck and interpret it. There are two other way to give input to our program, to know more about them just run `bin/main --help`.
 
 <!-- For the first time you might want to run `./bin/main --help` go get a feel of how it works. That's it c; -->
 
-# Syntax
+# Syntax & Ast
 
 Here below we list the `context-free grammar` of our parser:
 
@@ -35,6 +35,8 @@ Here below we list the `context-free grammar` of our parser:
 
 <type>       ::=  "int" | "bool" | "unit" | "ref" <type>
 ```
+
+About the AST, we tried to be clever and spare as much as possible, not to endup with tons of nodes so the full extend of it might not be easy to understand. But in the beggining of of [src/Parser.hs](src/Parser.hs) you will find a list of all the official nodes. I don't know if you will even peek at the code, but I left this message just in case.
 
 # Extra features
 
@@ -63,7 +65,7 @@ PLEASE IGNORE WHAT IS BELOW IT IS HERE FOR THE SOLE PURPOSE OF GUIDING US THROUG
 # Features to implement
 - [x] If stamemt
 - [x] Assigment
-- [ ] While loop
+- [x] While loop
 - [x] Functions print and println
 - [x] Semi-colon expressions c:
 - [x] References things (`new`, `!` and `ref` type)
