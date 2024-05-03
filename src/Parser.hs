@@ -75,6 +75,8 @@ data Assigment = Assigment {
     assignValue  :: Ast
 } deriving (Show, Eq)
 
+-- Ast { token :: Token, Maybe Type :: Type, node :: AstNode } 
+-- Ast { token :: Token, Type :: Type, node :: AstNode } 
 data Ast = Ast { token :: Token, node :: AstNode } deriving (Eq, Show)
 data AstNode = 
             Binary   Ast TokenValue Ast
@@ -90,6 +92,34 @@ data AstNode =
           | Unit
          deriving (Eq, Show)
 
+-- TODO: think about this...
+-- having informations here
+-- data BinaryOperation = 
+-- -- arithmetic 
+--       ADD 
+--     | SUB 
+--     | TIMES 
+--     | DIV 
+-- -- logical
+--     | OR 
+--     | AND 
+-- -- comparison
+--     | GT 
+--     | LT 
+--     | EQ
+--
+--     | N_EQ
+--     | GT_E
+--     | LT_E
+--     deriving (Show, Eq)
+--
+--data UnaryOperation = 
+--    | NEW
+--    | INV
+--
+--    | NEG
+--    | PRINT
+--    | PRINTLN
 -- TODO:: Change all case to maybes c:
 type ParserState = ExceptT Error (State [Token])
 
@@ -161,7 +191,7 @@ decl :: ParserState Ast
 decl = do
     match [LET] Parser.sequence $ \t -> do
             assigns <- letAssigments
-            result  <- Ast t . LetBlock assigns <$> decl
+            result  <- makeAst t . LetBlock assigns <$> decl
             consume [END] "Expected 'end' at the end of a let block."
             return result
 
@@ -169,50 +199,50 @@ sequence :: ParserState Ast
 sequence = do 
     left <- assigment 
     match [SEMI_COLON] (return left) $
-        \t -> Ast t . Sequence left <$> Parser.sequence
+        \t -> makeAst t . Sequence left <$> Parser.sequence
 
 
 assigment :: ParserState Ast
 assigment = do
     left <- expr 
     match [ASSIGN] (return left) $
-        \t -> Ast t . RefAssignment left <$> assigment 
+        \t -> makeAst t . RefAssignment left <$> assigment 
     
 
 expr :: ParserState Ast
 expr = do
     left  <- logicalOr -- TODO: think about using flip c:
     match [AND] (return left) $ 
-        \t -> Ast t . Binary left (value t) <$> expr
+        \t -> makeAst t . Binary left (value t) <$> expr
 
 logicalOr :: ParserState Ast
 logicalOr = do
     left  <- comparison
     match [OR] (return left) $ 
-        \t -> Ast t . Binary left (value t) <$> logicalOr
+        \t -> makeAst t . Binary left (value t) <$> logicalOr
 
 comparison :: ParserState Ast
 comparison = do
     left  <- term 
     match [ GT', LT', GT_EQ, LT_EQ, EQ_EQ, N_EQ ] (return left) $ 
-            \t -> Ast t . Binary left (value t) <$> term
+            \t -> makeAst t . Binary left (value t) <$> term
 
 term :: ParserState Ast
 term = do
     left  <- factor 
     match [PLUS, MINUS] (return left) $ 
-        \t -> Ast t . Binary left (value t) <$> term
+        \t -> makeAst t . Binary left (value t) <$> term
 
 factor :: ParserState Ast
 factor = do
     left  <- unary
     match [TIMES, SLASH] (return left) $ 
-        \t -> Ast t . Binary left (value t) <$> factor
+        \t -> makeAst t . Binary left (value t) <$> factor
 
 unary :: ParserState Ast
 unary = do -- TODO: think about this
     match [MINUS, NOT, NEW, BANG] primary $
-       \t -> Ast t . Unary (value t) <$> unary
+       \t -> makeAst t . Unary (value t) <$> unary
 
 primary :: ParserState Ast
 primary = do
@@ -220,15 +250,15 @@ primary = do
     modify customTail
     case value token of 
         LEFT_PAREN -> 
-            case' [RIGHT_PAREN] (return . (`Ast` Unit)) $ do
+            case' [RIGHT_PAREN] (return . (`makeAst` Unit)) $ do
                 res <- expr
                 consume [RIGHT_PAREN] "Missing enclosing ')'."
                 return res
 
-        TRUE      -> return . Ast token $ Bool True
-        FALSE     -> return . Ast token $ Bool False
-        (Num n)   -> return . Ast token $ Number n
-        (Id name) -> return . Ast token $ Var name
+        TRUE      -> return . makeAst token $ Bool True
+        FALSE     -> return . makeAst token $ Bool False
+        (Num n)   -> return . makeAst token $ Number n
+        (Id name) -> return . makeAst token $ Var name
         IF        -> do
             condition <- expr
             consume [THEN] "Expected 'then' after if condition."
@@ -236,16 +266,16 @@ primary = do
             elseBody <- match [ELSE] (return Nothing) (const $ Just <$> decl)
             consume [END] "Expected 'end' at the end of the if then else declaration."
 
-            return . Ast token $ If { condition, body, elseBody }
+            return . makeAst token $ If { condition, body, elseBody }
 
         WHILE     -> do
             condition <- expr
             consume [DO] "Expected 'do' after while condition."
             body <- decl
             consume [END] "Expected 'end' at the end of while."
-            return . Ast token $ While condition body
+            return . makeAst token $ While condition body
 
-        x | x `elem` [PRINT, PRINTLN] -> Ast token . Unary x <$> expr 
+        x | x `elem` [PRINT, PRINTLN] -> makeAst token . Unary x <$> expr 
 
         _ -> do 
             modify (token:) -- put it bach to the top c:
@@ -286,6 +316,8 @@ customHead = List.head . List.fromList
 customTail :: [a] -> [a]
 customTail = List.tail . List.fromList
 
+makeAst :: Token -> AstNode -> Ast 
+makeAst token node = Ast { token, node } 
 {-
 TODO: think about this
 

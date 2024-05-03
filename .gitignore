@@ -2,3 +2,4 @@ bin/*
 !bin/*.jar
 *.class
 *.txt
+docs/

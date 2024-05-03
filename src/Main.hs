@@ -4,7 +4,7 @@ import Serializer
 import Core
 import Errors
 
-import Control.Monad (unless, foldM_)
+import Control.Monad (unless, foldM_, void)
 import System.IO (hFlush, stdout, hGetContents, openTempFile, hPutStrLn, stderr, print, hPutStr, hClose)
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
@@ -67,7 +67,7 @@ interpretFile filename =
         contents <- readFile filename 
         case interpretProgram contents of
             Left err     -> putStrLn $ formatErr contents err
-            Right result -> result >> return ()
+            Right result -> void result
     where 
         readHandler :: IOError -> IO a
         readHandler e 
