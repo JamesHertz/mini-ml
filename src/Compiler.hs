@@ -6,7 +6,7 @@ module Compiler(
     Cond(..)
 ) where
 
-import Parser (Ast(..), AstNode(..))
+import Parser (BasicAst, Ast(..), AstNode(..))
 import TypeChecker (Type(..), typeCheck)
 import Scanner (TokenValue(..))
 import Control.Monad.State (State, evalState, gets, put)
@@ -65,13 +65,14 @@ type CompilerState = State Int
 type Program = [Instr]
 
 -- TODO: think about this c:
-compile :: Ast -> Result Program
+compile :: BasicAst -> Result Program
 compile ast = do
-    typ <- typeCheck ast
-    let program = evalState (compile' ast) 0
-    return $ program ++ [Print typ]
+    typeCheck ast
+    return $ evalState (compile' ast) 0
+    -- let program = evalState (compile' ast) 0
+    -- return $ program ++ [Print typ]
 
-compile' :: Ast -> CompilerState Program
+compile' :: BasicAst -> CompilerState Program
 compile' (Ast { node = Number n })   = return [SIpush n]
 compile' (Ast { node = Bool value }) = return [SIpush $ if value then 1 else 0] 
 

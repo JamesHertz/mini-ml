@@ -1,14 +1,21 @@
+-- {-# LANGUAGE RecordWildCards #-}
+
 module TypeChecker (
     Type(..),
-    typeCheck
+    typeCheck,
+    TypedAst
 ) where
 
+
+
 -- TODO: improve overall error reporting c:
-import Parser ( Ast(..), AstNode(..), Token(..), Assigment(..))
+import Parser ( Ast(..), AstNode(..), Token(..), Assigment(..), BasicAst)
 import Scanner (Token(..), TokenValue(..))
 import qualified Data.Map as Map
 import Control.Monad (foldM, when)
 import Errors  
+import Data.Profunctor.Closed (Environment(Environment))
+import Text.Printf (printf)
 
 data Type = IntType | BoolType | UnitType | RefType Type deriving (Eq)
 
@@ -20,26 +27,53 @@ instance Show Type where
     show UnitType      = "unit"
     show (RefType typ) = "ref " ++ show typ
 
-typeCheck :: Ast -> Result Type
+
+type TypedAst = Ast Type
+
+-- TODO: add to Types.hs
+token :: BasicAst -> Token
+token = ctx
+
+type' :: TypedAst -> Type
+type' = ctx
+
+
+-- 
+typeCheck :: BasicAst -> Result TypedAst
 typeCheck ast = typeCheck' ast Map.empty
 
-typeCheck' :: Ast -> TypeEnv ->  Result Type
-typeCheck' Ast { node = Number x } env = return IntType
-typeCheck' Ast { node = Bool x }   env = return BoolType
-typeCheck' Ast { node = Unit }     env = return UnitType
+typeCheck' :: BasicAst -> TypeEnv -> Result TypedAst
+typeCheck' Ast { node = Number x } env = return $ Ast IntType  (Number x)
+typeCheck' Ast { node = Bool x }   env = return $ Ast BoolType (Bool x)
+typeCheck' Ast { node = Unit }     env = return $ Ast UnitType Unit
 
 -- unaries
-typeCheck' Ast { node = Unary MINUS x } env   = checkValue x env IntType
-typeCheck' Ast { node = Unary NOT value } env = checkValue value env BoolType 
-typeCheck' Ast { node = Unary PRINTLN value } env = typeCheck' value env >> return UnitType
-typeCheck' Ast { node = Unary PRINT   value } env = typeCheck' value env >> return UnitType
-typeCheck' Ast { node = Unary NEW     value } env = RefType <$> typeCheck' value env
-typeCheck' Ast { node = Unary BANG    value, token } env = do
-    typ <- typeCheck' value env
-    case typ of
-        RefType t -> return t
-        _ -> makeError token $ "Expected 'ref T' type but found '" ++ show typ ++ "' type."
-    
+typeCheck' Ast { node = Unary NEW value } env = do 
+    valueT <- typeCheck' value env
+    return Ast { 
+        ctx = RefType (type' valueT),
+        node = Unary NEW valueT
+    }
+
+typeCheck' ast@Ast { node = Unary BANG value } env = do
+    valueT <- typeCheck' value env
+    case type' valueT of
+        RefType t -> return Ast { 
+                ctx  = type' valueT,
+                node = Unary BANG valueT
+            }
+        _ -> makeError (token ast) $ 
+                printf "Expected 'ref T' type but found '%s' type." (show $ type' valueT)
+
+typeCheck' Ast { node = Unary op value  } env = 
+    let (valueT, typ) =
+          case op of 
+              MINUS   -> (checkValue value env IntType, IntType)
+              NOT     -> (checkValue value env BoolType, BoolType)
+              PRINTLN -> (typeCheck' value env, UnitType)
+              PRINT   -> (typeCheck' value env, UnitType)
+    in Ast typ . Unary op <$> valueT
+
 -- binaries
 -- arithmetic operators
 typeCheck' ast@Ast { node = Binary _ PLUS  _ } env = checkBinary ast env IntType IntType
@@ -56,93 +90,131 @@ typeCheck' ast@Ast { node = Binary _  GT'  _ } env = checkBinary ast env IntType
 typeCheck' ast@Ast { node = Binary _  LT'  _ } env = checkBinary ast env IntType BoolType
 typeCheck' ast@Ast { node = Binary _ GT_EQ _ } env = checkBinary ast env IntType BoolType
 typeCheck' ast@Ast { node = Binary _ LT_EQ _ } env = checkBinary ast env IntType BoolType
-
+--
 typeCheck' ast@Ast { node = Binary _ EQ_EQ _ } env = checkEquals ast env
 typeCheck' ast@Ast { node = Binary _ N_EQ  _ } env = checkEquals ast env
 
 -- handling identifier c:
+-- TODO: look for a better solution
 typeCheck' Ast { node = LetBlock assigns body } env = do
-    newEnv <- foldM mapFunc env assigns
-    typeCheck' body newEnv
+    result <- foldM mapFunc (env,[]) assigns
+    bodyT  <- typeCheck' body (fst result)
+    return Ast { ctx = type' bodyT, node = LetBlock (reverse $ snd result) bodyT } 
     where 
-        mapFunc map Assigment { varName, assignValue, expectedType } = do 
-            typ <- typeCheck' assignValue map
-            maybe (insert typ) (\(typ', token) -> 
-                if typ' == typ then 
-                    insert typ
+        mapFunc (env, assingsT) Assigment { varName, assignValue, expectedType } = do 
+            valueT <- typeCheck' assignValue env
+
+            let 
+                valueType = type' valueT
+                assingsT' = Assigment varName Nothing valueT : assingsT
+                newEnv    = Map.insert varName valueType env
+                result    = (newEnv, assingsT')
+
+            maybe (return result) (\(typ, token) -> 
+                if valueType == typ then 
+                    return result
                 else makeError token $ 
-                        "Expected '" ++ show typ' ++ "' type, but expression produced '" ++ show typ ++ "' type."
+                        printf "Expected '%s' type, but expression produced '%s' type."
+                                (show valueType) (show typ)
                 ) expectedType
-            where 
-                insert typ = return $ Map.insert varName typ map
 
-typeCheck' Ast { token, node = Var name } env = 
-    maybe (makeError token $ "Undefined identifier: " ++ name) 
-            return $  Map.lookup name env 
+typeCheck' ast@Ast { node = Var name } env = 
+    maybe (makeError (token ast) $ "Undefined identifier: " ++ name)
+            (return . (`Ast` Var name)) $  Map.lookup name env 
 
-typeCheck' Ast { token, node = RefAssignment ref value } env = do
+typeCheck' ast@Ast { node = RefAssignment ref value } env = do
     refT   <- typeCheck' ref env
     valueT <- typeCheck' value env
-    case refT of
-        RefType expectedT -> 
-            when (valueT /= expectedT) $
-                makeError token $ "Expected '" ++ show expectedT 
-                    ++ "' type for the right-side value but found '" ++ show valueT ++ "' type."
-        _ -> makeError token $ "Expected 'ref T' type as the left-side value but found '" 
-                ++ show refT ++ "' type."
-    return valueT
+
+    let
+         refType = type' refT
+         valueType = type' valueT
+
+    case refType of
+        RefType expectedType -> 
+            when (valueType /= expectedType) $
+                makeError (token ast) $ 
+                  printf "Expected '%s' type for the right-side value but found '%s' type."
+                         (show expectedType) (show valueType)
+        _ -> makeError (token ast) $ 
+                printf "Expected 'ref T' type as the left-side value but found '%s' type." (show refType)
+    return Ast { 
+        ctx  = valueType,
+        node = RefAssignment refT valueT 
+    }
 
 -- control flow
-typeCheck' Ast { token, node = If { condition, body, elseBody } } env = do
-    checkValue condition env BoolType
-    bodyType <- typeCheck' body env
-    maybe (return UnitType) (\ast -> do
-        elseType <- typeCheck' ast env
-        if elseType == bodyType then return bodyType
-        else makeError token $ "Expected both branch of the if to produce same type but found '" 
-                                ++ show bodyType ++ "' type and '" ++ show elseType ++ "' type."
-     ) elseBody
+typeCheck' ast@Ast { node = If { condition, body, elseBody } } env = do
+    condT <- checkValue condition env BoolType
+    bodyT <- typeCheck' body env
+    let makeAst typ elseT = return Ast {
+             ctx  = typ, 
+             node = If condT bodyT elseT
+         }
+    maybe (makeAst UnitType Nothing) (\ast -> do
+        elseT <- typeCheck' ast env
+        let bodyType = type' bodyT
+            elseType = type' elseT
+        if elseType == elseType 
+            then makeAst bodyType (Just elseT)
+        else makeError (token ast) $ 
+            printf "Expected both branch of the if to produce same type but found '%s' type and '%s' type." 
+                   (show bodyType) (show elseType)
+      ) elseBody
 
 typeCheck' Ast { node = Sequence fst snd } env  = do
-    typeCheck' fst env
-    typeCheck' snd env
+    fstT <- typeCheck' fst env
+    sndT <- typeCheck' snd env
+    return Ast { ctx = type' sndT, node = Sequence fstT sndT }
 
-typeCheck' Ast { node = While condition body } env  = do
-    checkValue condition env BoolType
-    typeCheck' body env
-    return UnitType
+typeCheck' Ast { node = While condition body } env = do
+    condT <- checkValue condition env BoolType
+    bodyT <- typeCheck' body env
+    return Ast { ctx = UnitType, node = While condT bodyT }
 
 -- Helper function c:
 -- TODO: make check more generic so you can use it for this c:
-checkBinary :: Ast -> TypeEnv -> Type -> Type -> Result Type
-checkBinary Ast { token, node = Binary left _ right } env expected result = do
-    left'  <- typeCheck' left  env
-    right' <- typeCheck' right env
+checkBinary :: BasicAst -> TypeEnv -> Type -> Type -> Result TypedAst
+checkBinary ast@Ast { node = Binary left op right } env expected result = do
+    leftT  <- typeCheck' left  env
+    rightT <- typeCheck' right env
 
-    if left' == right' 
-        && right' == expected 
-    then return result
-    else makeError token $ "Expected two '" ++ show expected ++ "' type but found: '" 
-                    ++ show left' ++ "' type and '" ++ show right' ++ "' type."
+    let
+        leftType  = type' leftT
+        rightType = type' rightT
 
-checkValue :: Ast -> TypeEnv -> Type -> Result Type -- TODO: finish this
+    if leftType == rightType
+        && rightType == expected 
+    then return Ast { ctx = expected, node = Binary leftT op rightT }
+    else makeError (token ast) $ 
+          printf "Expected two '%s' type but found '%s' type and '%s' type." 
+                 (show expected) (show leftType) (show rightType)
+
+-- TODO: finish this
+checkValue :: BasicAst -> TypeEnv -> Type -> Result TypedAst 
 checkValue ast env expected = do
     exprT <- typeCheck' ast env
-    if exprT == expected 
-        then return expected
-    else makeError (token ast) $ "Expected a/an '" 
-            ++ show expected ++ "' type but found a/an '" ++ show exprT ++ "' type."
+    if ctx exprT == expected 
+        then return exprT
+    else makeError (token ast) $ 
+          printf "Expected a/an '%s' type but found a/an '%s' type." 
+                 (show expected) (show exprT)
 
-checkEquals :: Ast -> TypeEnv -> Result Type
-checkEquals Ast { token, node = Binary left _ right } env =  do
-    left'  <- typeCheck' left env
-    right' <- typeCheck' right env
+checkEquals :: BasicAst -> TypeEnv -> Result TypedAst
+checkEquals ast@Ast { node = Binary left op right } env =  do
+    leftT  <- typeCheck' left env
+    rightT <- typeCheck' right env
 
-    if left' == right' 
-        then return BoolType
+    let
+        leftType  = type' leftT
+        rightType = type' rightT
+
+    if  leftType == rightType
+        then return Ast { ctx = BoolType, node = Binary leftT op rightT }
     -- TODO: think about the posibility of displaying the positions of the others types
-    else makeError token $ "Expected two equal type but found: '" 
-                              ++ show left' ++ "' type and '" ++ show right' ++ "' type."
+    else makeError (token ast) $ 
+          printf "Expected two equal type but found: '%s' type and '%s' type." 
+                 (show leftType) (show rightType)
 
 makeError :: Token -> String -> Result a
 makeError Token { Scanner.line, Scanner.position } msg = 

@@ -3,11 +3,11 @@ module Parser (
     AstNode(..),
     Token(..),
     parse,
-    Assigment(..)
+    Assigment(..),
+    BasicAst
 ) where
 
 import {-# SOURCE #-} TypeChecker (Type(..))
--- import Scanner ( Token(..), TokenValue(..) )
 import Control.Monad.State (State, get, put, evalState, gets, modify)
 import Control.Monad.Except (ExceptT, runExceptT)
 import Errors
@@ -69,31 +69,33 @@ Unit
 type TypeToken   = Token
 type TypeContext = (Type, TypeToken)
 
-data Assigment = Assigment {
+data Assigment a = Assigment {
     varName      :: String,
     expectedType :: Maybe TypeContext,
-    assignValue  :: Ast
+    assignValue  :: Ast a
 } deriving (Show, Eq)
 
--- Ast { token :: Token, Maybe Type :: Type, node :: AstNode } 
--- Ast { token :: Token, Type :: Type, node :: AstNode } 
-data Ast = Ast { token :: Token, node :: AstNode } deriving (Eq, Show)
-data AstNode = 
-            Binary   Ast TokenValue Ast
-          | Unary    TokenValue Ast 
-          | LetBlock [Assigment] Ast
-          | RefAssignment Ast Ast
-          | If { condition :: Ast, body :: Ast, elseBody :: Maybe Ast }
+type BasicAst = Ast Token
+
+-- TODO: think about moving some types to a separate file
+data Ast a = Ast { ctx :: a, node :: AstNode a } deriving (Eq, Show)
+data AstNode a = 
+            Binary   (Ast a)  TokenValue (Ast a)
+          | Unary    TokenValue (Ast a)
+          | LetBlock [Assigment a] (Ast a)
+          | RefAssignment (Ast a) (Ast a)
+          | If { condition :: Ast a, body :: Ast a, elseBody :: Maybe (Ast a) }
           | Var      String
           | Number   Int
           | Bool     Bool
-          | Sequence Ast Ast
-          | While    Ast Ast
+          | Sequence (Ast a) (Ast a)
+          | While    (Ast a) (Ast a)
           | Unit
          deriving (Eq, Show)
 
 -- TODO: think about this...
 -- having informations here
+--
 -- data BinaryOperation = 
 -- -- arithmetic 
 --       ADD 
@@ -107,7 +109,6 @@ data AstNode =
 --     | GT 
 --     | LT 
 --     | EQ
---
 --     | N_EQ
 --     | GT_E
 --     | LT_E
@@ -116,11 +117,11 @@ data AstNode =
 --data UnaryOperation = 
 --    | NEW
 --    | INV
---
 --    | NEG
 --    | PRINT
 --    | PRINTLN
 -- TODO:: Change all case to maybes c:
+
 type ParserState = ExceptT Error (State [Token])
 
 {-
@@ -146,10 +147,10 @@ Context free grammar:
 <type>       ::=  "int" | "bool" | "unit" | "ref" <type>
 -}
 
-parse :: [Token] -> Result Ast
+parse :: [Token] -> Result BasicAst
 parse = evalState (runExceptT parse') 
 
-parse' :: ParserState Ast
+parse' :: ParserState BasicAst
 parse' = do
     ast <- decl
     consume [EOF] "Expected end of file."
@@ -169,7 +170,7 @@ parseType = do
         convert BOOL = BoolType  
         convert UNIT = UnitType
         
-letAssigments :: ParserState [Assigment]
+letAssigments :: ParserState [Assigment Token]
 letAssigments = do
     token <- consume [Id ""] "Expected and indentifier after 'let' keyword."
     expectedType <- match [COLON] (return Nothing) $ const (Just <$> parseType)
@@ -187,7 +188,7 @@ letAssigments = do
         makeError "Expected 'in' after variable declaration."
 
 -- decl = match [LET] >>= maybe expr (\_ -> return (Bool True)) -- TODO: think about this 
-decl :: ParserState Ast
+decl :: ParserState BasicAst
 decl = do
     match [LET] Parser.sequence $ \t -> do
             assigns <- letAssigments
@@ -195,56 +196,56 @@ decl = do
             consume [END] "Expected 'end' at the end of a let block."
             return result
 
-sequence :: ParserState Ast 
+sequence :: ParserState BasicAst 
 sequence = do 
     left <- assigment 
     match [SEMI_COLON] (return left) $
         \t -> makeAst t . Sequence left <$> Parser.sequence
 
 
-assigment :: ParserState Ast
+assigment :: ParserState BasicAst
 assigment = do
     left <- expr 
     match [ASSIGN] (return left) $
         \t -> makeAst t . RefAssignment left <$> assigment 
     
 
-expr :: ParserState Ast
+expr :: ParserState BasicAst
 expr = do
     left  <- logicalOr -- TODO: think about using flip c:
     match [AND] (return left) $ 
         \t -> makeAst t . Binary left (value t) <$> expr
 
-logicalOr :: ParserState Ast
+logicalOr :: ParserState BasicAst
 logicalOr = do
     left  <- comparison
     match [OR] (return left) $ 
         \t -> makeAst t . Binary left (value t) <$> logicalOr
 
-comparison :: ParserState Ast
+comparison :: ParserState BasicAst
 comparison = do
     left  <- term 
     match [ GT', LT', GT_EQ, LT_EQ, EQ_EQ, N_EQ ] (return left) $ 
             \t -> makeAst t . Binary left (value t) <$> term
 
-term :: ParserState Ast
+term :: ParserState BasicAst
 term = do
     left  <- factor 
     match [PLUS, MINUS] (return left) $ 
         \t -> makeAst t . Binary left (value t) <$> term
 
-factor :: ParserState Ast
+factor :: ParserState BasicAst
 factor = do
     left  <- unary
     match [TIMES, SLASH] (return left) $ 
         \t -> makeAst t . Binary left (value t) <$> factor
 
-unary :: ParserState Ast
+unary :: ParserState BasicAst
 unary = do -- TODO: think about this
     match [MINUS, NOT, NEW, BANG] primary $
        \t -> makeAst t . Unary (value t) <$> unary
 
-primary :: ParserState Ast
+primary :: ParserState BasicAst
 primary = do
     token <- gets customHead
     modify customTail
@@ -316,8 +317,8 @@ customHead = List.head . List.fromList
 customTail :: [a] -> [a]
 customTail = List.tail . List.fromList
 
-makeAst :: Token -> AstNode -> Ast 
-makeAst token node = Ast { token, node } 
+makeAst :: Token -> AstNode Token -> BasicAst
+makeAst ctx node = Ast { ctx, node } 
 {-
 TODO: think about this
 

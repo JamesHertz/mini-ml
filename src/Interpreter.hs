@@ -4,7 +4,7 @@ module Interpreter (
 )where
 
 -- import Numeric (showIntAtBase)
-import Parser ( Ast(..), AstNode(..), Token(..), Assigment(..)  )
+import Parser ( BasicAst, Ast(..), AstNode(..), Token(..), Assigment(..)  )
 import Scanner (TokenValue(..))
 import qualified Data.Map as Map
 import Control.Monad (foldM)
@@ -31,10 +31,10 @@ instance Show Value where
 
 type EvalState = StateT (Address, MemoryCells) IO
 
-eval :: Ast -> IO Value
+eval :: BasicAst -> IO Value
 eval ast = evalStateT (eval' ast Map.empty) (0, Map.empty)
 
-eval' :: Ast -> Enviroment -> EvalState Value
+eval' :: BasicAst -> Enviroment -> EvalState Value
 eval' Ast { node = Number x } env = return $ IntValue x
 eval' Ast { node = Bool x }   env = return $ BoolValue x
 eval' Ast { node = Unit }     env = return UnitValue
@@ -137,19 +137,19 @@ setValue :: Address -> Value -> EvalState ()
 setValue address value = modify $ second (Map.insert address value)
     
 -- helper functions
-evalBinary :: (Ast -> Enviroment -> EvalState a) -> (a -> a -> b) -> (b -> c) -> Ast -> Enviroment -> EvalState c
+evalBinary :: (BasicAst -> Enviroment -> EvalState a) -> (a -> a -> b) -> (b -> c) -> BasicAst -> Enviroment -> EvalState c
 evalBinary evaluator operation wrapper Ast { node = Binary left _ right } env = do
     left'  <- evaluator left env
     right' <- evaluator right env
     return $ wrapper $ left' `operation` right'
 
-evalInt :: Ast -> Enviroment -> EvalState Int 
+evalInt :: BasicAst -> Enviroment -> EvalState Int 
 evalInt ast env = do
     value <- eval' ast env
     let (IntValue result) = value
     return result
 
-evalBool :: Ast -> Enviroment -> EvalState Bool
+evalBool :: BasicAst -> Enviroment -> EvalState Bool
 evalBool ast env = do
     value <- eval' ast env
     let (BoolValue result) = value
