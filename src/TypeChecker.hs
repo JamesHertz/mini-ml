@@ -6,38 +6,14 @@ module TypeChecker (
     TypedAst
 ) where
 
-
-
--- TODO: improve overall error reporting c:
-import Parser ( Ast(..), AstNode(..), Token(..), Assigment(..), BasicAst)
-import Scanner (Token(..), TokenValue(..))
 import qualified Data.Map as Map
 import Control.Monad (foldM, when)
 import Errors  
 import Data.Profunctor.Closed (Environment(Environment))
 import Text.Printf (printf)
-
-data Type = IntType | BoolType | UnitType | RefType Type deriving (Eq)
+import Types
 
 type TypeEnv = Map.Map String Type
-
-instance Show Type where
-    show IntType       = "int"
-    show BoolType      = "bool"
-    show UnitType      = "unit"
-    show (RefType typ) = "ref " ++ show typ
-
-
-type TypedAst = Ast Type
-
--- TODO: add to Types.hs
-token :: BasicAst -> Token
-token = ctx
-
-type' :: TypedAst -> Type
-type' = ctx
-
-
 -- 
 typeCheck :: BasicAst -> Result TypedAst
 typeCheck ast = typeCheck' ast Map.empty
@@ -59,7 +35,7 @@ typeCheck' ast@Ast { node = Unary BANG value } env = do
     valueT <- typeCheck' value env
     case type' valueT of
         RefType t -> return Ast { 
-                ctx  = type' valueT,
+                ctx  = t,
                 node = Unary BANG valueT
             }
         _ -> makeError (token ast) $ 
@@ -155,7 +131,7 @@ typeCheck' ast@Ast { node = If { condition, body, elseBody } } env = do
         elseT <- typeCheck' ast env
         let bodyType = type' bodyT
             elseType = type' elseT
-        if elseType == elseType 
+        if bodyType == elseType 
             then makeAst bodyType (Just elseT)
         else makeError (token ast) $ 
             printf "Expected both branch of the if to produce same type but found '%s' type and '%s' type." 
@@ -185,7 +161,7 @@ checkBinary ast@Ast { node = Binary left op right } env expected result = do
 
     if leftType == rightType
         && rightType == expected 
-    then return Ast { ctx = expected, node = Binary leftT op rightT }
+    then return Ast { ctx = result, node = Binary leftT op rightT }
     else makeError (token ast) $ 
           printf "Expected two '%s' type but found '%s' type and '%s' type." 
                  (show expected) (show leftType) (show rightType)
@@ -194,11 +170,11 @@ checkBinary ast@Ast { node = Binary left op right } env expected result = do
 checkValue :: BasicAst -> TypeEnv -> Type -> Result TypedAst 
 checkValue ast env expected = do
     exprT <- typeCheck' ast env
-    if ctx exprT == expected 
+    if type' exprT == expected 
         then return exprT
     else makeError (token ast) $ 
           printf "Expected a/an '%s' type but found a/an '%s' type." 
-                 (show expected) (show exprT)
+                 (show expected) (show $ type' exprT)
 
 checkEquals :: BasicAst -> TypeEnv -> Result TypedAst
 checkEquals ast@Ast { node = Binary left op right } env =  do
@@ -217,7 +193,7 @@ checkEquals ast@Ast { node = Binary left op right } env =  do
                  (show leftType) (show rightType)
 
 makeError :: Token -> String -> Result a
-makeError Token { Scanner.line, Scanner.position } msg = 
+makeError Token { Types.line, Types.position } msg = 
     Left $ Error { 
                    errType  = TypingError, 
                    message  = msg, 
