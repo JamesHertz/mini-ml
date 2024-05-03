@@ -73,6 +73,8 @@ Var    _
 Unit 
 
  -}
+
+-- TODO: think about making this a functor (which will probably simplify typeCheck)
 data Ast a     = Ast { ctx :: a, node :: AstNode a } deriving (Eq, Show)
 data AstNode a = 
             Binary   (Ast a)  TokenValue (Ast a)
