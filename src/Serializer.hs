@@ -4,6 +4,8 @@ module Serializer (
 
 import Compiler (Program, Instr(..))
 import Data.List (intercalate)
+import Data.Char (toLower)
+import Text.Printf (printf)
 
 preamble :: String
 preamble = "\
@@ -19,7 +21,7 @@ preamble = "\
 \   .limit stack 256                                      \n\
 \   ; setup local variables:                              \n\
 \   ;    1 - the PrintStream object held in java.lang.out \n\
-\   getstatic java/lang/System/out Ljava/io/PrintStream;  \n\
+\   ; getstatic java/lang/System/out Ljava/io/PrintStream;  \n\
 \ \n; Your code below c:\n"
 
 footer :: String
@@ -33,4 +35,14 @@ footer  = "\n\
 serialize :: Program -> String
 serialize p = 
     preamble ++ body ++ footer
-    where body = intercalate "\n" $ map show p
+    where body = intercalate "\n" $ map serializeInstr p
+
+serializeInstr :: Instr -> String
+serializeInstr (ILabel label)        = label ++ ":"
+serializeInstr (Goto label)          = "goto " ++ label 
+serializeInstr (GetStatic fieldSpec) = "getstatic " ++ fieldSpec
+serializeInstr (Ifeq label)          = "ifeq " ++ label
+serializeInstr (Invoke methodSpec)   = "invokevirtual " ++ methodSpec
+serializeInstr (IfIcomp cond label)  = printf "if_icmp%s %s" (show cond) label
+-- serializeInstr AconstNull = "aconst_null"
+serializeInstr instr      = map toLower (show instr)

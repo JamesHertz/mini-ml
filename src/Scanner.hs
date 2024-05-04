@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Scanner (
     TokenValue(..),
     Token(..),
@@ -176,9 +177,7 @@ makeToken value = do
   return $ Token value (currLine state) (startPosition state)
   where 
     updateStarPos = modify $ 
-        \ Context { source, currLine, currPosition } -> Context {
-            source, currLine, currPosition, startPosition = currPosition
-        }
+        \ Context { .. } -> Context { startPosition = currPosition, .. }
 
 match :: Char -> a -> a -> ScannerState a
 match expected ifTrue ifFalse = do

@@ -12,6 +12,7 @@ import System.Directory (removeFile)
 import System.Process (rawSystem)
 import Control.Exception (try, handle)
 import System.IO.Error (isDoesNotExistError)
+import Language.Preprocessor.Cpphs (filename)
 
 -- constants
 lineNumberSize :: Int
@@ -27,8 +28,10 @@ main =  do
         (flag:_) | flag `elem` ["-h", "--help"] -> usage
         ("repl": _ ) -> putStrLn "Running the interpreter REPL" >> runInterpreter
         ("editor":_) -> editorMode
-        (filename:_) -> interpretFile filename
+        ("-c":filename:_) -> compileFile  filename
+        ("-i":filename:_) -> interpretFile filename
 
+-- TODO: make it so that editor mode also compile to JVM
 editorMode :: IO ()
 editorMode = 
     handle editorHandler $ do
@@ -74,28 +77,28 @@ interpretFile filename =
             |  isDoesNotExistError e = printError $ "File '" ++ filename ++ "' not file."
             |  otherwise = printError $ "Unexpected error: " ++ show e
 
--- compileFile :: String -> IO ()
--- compileFile filename =
---     handle readHandler $ do
---         putStrLn $ "Compiling " ++ filename
---         contents <- readFile filename 
---         case compileProgram contents of
---             Left err -> putStrLn $ formatErr contents err
---             Right program -> do
---                     (name, handler) <- openTempFile "/tmp" "tmp.jasm"
---                     hPutStr handler $ serialize program
---                     hFlush handler
---                     hClose handler
---
---                     rawSystem "java" ["-jar", "bin/jasmin.jar", name]
---
---                     -- removeFile name
---                     return ()
---     where 
---         readHandler :: IOError -> IO a
---         readHandler e 
---             |  isDoesNotExistError e = printError $ "File '" ++ filename ++ "' not file."
---             |  otherwise = printError $ "Unexpected error: " ++ show e
+compileFile :: String -> IO ()
+compileFile filename =
+    handle readHandler $ do
+        putStrLn $ "Compiling " ++ filename
+        contents <- readFile filename 
+        case compileProgram contents of
+            Left err -> putStrLn $ formatErr contents err
+            Right program -> do
+                    (name, handler) <- openTempFile "./bin" "tmp.jasm"
+                    hPutStr handler $ serialize program
+                    hFlush handler
+                    hClose handler
+
+                    rawSystem "java" ["-jar", "bin/jasmin.jar", name]
+
+                    -- removeFile name
+                    return ()
+    where 
+        readHandler :: IOError -> IO a
+        readHandler e 
+            |  isDoesNotExistError e = printError $ "File '" ++ filename ++ "' not file."
+            |  otherwise = printError $ "Unexpected error: " ++ show e
 
 runInterpreter :: IO ()
 runInterpreter = do
@@ -121,12 +124,14 @@ printError msg = do
 usage :: IO a
 usage = do
     name <- getProgName
-    -- TODO: use a better error message
+    -- TODO: 
+    --       * use a better error message
+    --       * add flags -i and -c to decide between compiling and interpreting
     hPutStrLn stderr $ "Usage: " ++ name ++ " [-h|--help] <command> \n"
     hPutStrLn stderr "\
-\Where <command> can be:                                     \n\
-\      repl   to run a REPL interpreter                      \n\
-\      editor to run a simple editor mode with lines numbers \n\
-\      FILE   to interpret a FILE"
+\Where <command> can be:                                            \n\
+\      repl          to run a REPL interpreter                      \n\
+\      editor        to run a simple editor mode with lines numbers \n\
+\      -i | -c FILE  to interpret or respectively compile (to JVM) FILE"
     exitFailure
 
