@@ -5,7 +5,7 @@ import Core
 import Errors
 
 import Control.Monad (unless, foldM_, void)
-import System.IO (hFlush, stdout, hGetContents, openTempFile, hPutStrLn, stderr, print, hPutStr, hClose)
+import System.IO (hFlush, stdout, hGetContents, openTempFile, hPutStrLn, stderr, print, hPutStr, hClose, putStrLn)
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
 import System.Directory (removeFile)
@@ -85,15 +85,19 @@ compileFile filename =
         case compileProgram contents of
             Left err -> putStrLn $ formatErr contents err
             Right program -> do
-                    (name, handler) <- openTempFile "./bin" "tmp.jasm"
-                    hPutStr handler $ serialize program
-                    hFlush handler
-                    hClose handler
-
-                    rawSystem "java" ["-jar", "bin/jasmin.jar", name]
+                    mapM_ (\s -> do 
+                        putStrLn "--------\n" 
+                        putStrLn (content s)
+                     ) $ serialize program
+                        
+                    -- (name, handler) <- openTempFile "./bin" "tmp.jasm"
+                    -- hPutStr handler $ serialize program
+                    -- hFlush handler
+                    -- hClose handler
+                    --
+                    -- rawSystem "java" ["-jar", "bin/jasmin.jar", name]
 
                     -- removeFile name
-                    return ()
     where 
         readHandler :: IOError -> IO a
         readHandler e 

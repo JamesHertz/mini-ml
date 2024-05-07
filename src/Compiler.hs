@@ -4,33 +4,51 @@ module Compiler(
     compile,
     Program,
     Label,
-    Cond(..)
+    Cond(..), 
+
+    JvmProgram,
+    JvmType(..),
+    JvmClass(..),
+    LocId
 ) where
 
 import Types 
-import Control.Monad.State (State, evalState, gets, put, modify, foldM)
+import Control.Monad.State (State, runState, gets, put, modify, foldM, join, when)
 import Errors (Result)
 import Data.Char (toLower)
 import Text.Printf (printf)
+import Data.Bifunctor (bimap)
 
 import qualified Data.Map as Map
+import Data.Tuple.Extra (fst3, snd3, first)
+import Data.Maybe (fromJust)
 
-type JvmProgram = ([Instr], [ClassFile])
-data JvmType    = JvmInt | JvmBool | CustomUnit | Class String
--- TODO: 
---       x  add the remaning types
---       x  handle refs types
+type JvmProgram = ([Instr], [JvmClass])
+-- TODO: think if you really want a Frame type c:
+data JvmType    = JvmInt | JvmBool | CustomUnit | Frame FrameId |  Class String
+
+-- TODO:: Do I really need this?
 instance Show JvmType where
     show JvmInt  = "I"
     show JvmBool = "Z"
     show CustomUnit = "stdlib/Unit"
+    show (Frame id) = show id
     show (Class name) = name
 
-type ClassField = (String, JvmType)
-data ClassFile = ClassFile {
-      name   :: String,
-      fields :: [ClassField]
+toJvmType :: Type -> JvmType
+toJvmType  IntType  = JvmInt
+toJvmType  BoolType = JvmInt
+toJvmType  UnitType = CustomUnit
+
+data JvmClass = JvmClass {
+      name       :: String,
+      -- TODO: think about this c:
+      fields     :: Map.Map LocId JvmType
 } deriving Show
+
+-- used to store static link for frames
+slLocId :: LocId
+slLocId = LocId 0 
 
 -- helper types
 type Label = String
@@ -65,7 +83,7 @@ data Instr =
     | New ClassSpec
     | InvokeSpecial MethodSpec
 
-    | Putfield FieldSpec JvmType
+    | PutField FieldSpec JvmType
     | GetField FieldSpec JvmType
 
     | GetStatic FieldSpec JvmType
@@ -77,6 +95,19 @@ data Instr =
 
  deriving Show
 
+-- pseudo instructions
+ifFalse :: String -> Instr
+ifFalse = Ifeq
+
+pushUnit :: Instr
+pushUnit = GetStatic "stdlib/Unit/SINGLE" CustomUnit
+
+putFrameField :: FrameId -> LocId -> JvmType -> Instr
+putFrameField frame field = PutField (printf "%s/%s" (show frame) (show field))
+
+getFrameField :: FrameId -> LocId -> JvmType -> Instr
+getFrameField frame field = GetField (printf "%s/%s" (show frame) (show field))
+
 data Cond  = CEQ | CNE | CLT | CGT | CLE | CGE
 instance Show Cond where
   show CEQ = "eq"
@@ -86,41 +117,47 @@ instance Show Cond where
   show CLE = "le"
   show CGE = "ge"
 
--- some instructions alias
-pushUnit :: Instr
-pushUnit = GetStatic "stdlib/Unit/SINGLE" CustomUnit
-
-ifFalse :: String -> Instr
-ifFalse = Ifeq
-
--- data FrameId = String
 data Context = Context {
     labelCount   :: Int,
     frameIdCount :: Int,
     depth        :: Int,
-    classFiles   :: [ClassFile], -- TODO: think about using a map to solve the refs problem
-    lastFrame    :: Maybe String
+    -- TODO: add this later
+    -- classFiles   :: [JvmClass]
+    frames       ::  Map.Map FrameId JvmClass,
+    lastFrame    :: Maybe FrameId
  }
 
 data VarLoc  = VarLoc {
         envDepth  :: Int,
-        frameLoc  :: String,
-        varType   :: JvmType
+        frameId   :: FrameId,
+        fieldId   :: LocId,
+        fieldType :: JvmType
     } deriving Show
+
+newtype FrameId = FrameId Int deriving(Ord, Eq)
+instance Show FrameId where
+    show (FrameId id) = printf "Frame_%d" id
+
+newtype LocId = LocId Int deriving(Ord, Eq)
+instance Show LocId where
+    show (LocId id) = printf "loc_%d" id
 
 type CompilerEnv   = Map.Map String VarLoc
 type CompilerState = State Context
 type Program = [Instr]
 
 -- TODO: think about this c:
-compile :: TypedAst -> Result Program
-compile ast = return . evalState (compile' ast Map.empty) $ Context {
-    labelCount   = 0,
-    frameIdCount = 0,
-    depth        = 0,
-    classFiles   = [],
-    lastFrame    = Nothing
- }
+compile :: TypedAst -> JvmProgram
+compile ast = 
+    let 
+        (instrs, state)  = runState (compile' ast Map.empty) $ Context {
+            labelCount   = 0,
+            frameIdCount = 0,
+            depth        = 0,
+            frames       = Map.empty,
+            lastFrame    = Nothing
+         }
+    in (instrs, Map.elems $ frames state)
 
 compile' :: TypedAst -> CompilerEnv -> CompilerState Program
 compile' Ast { node = Number n }   env = return [SIpush n]
@@ -145,7 +182,6 @@ compile' Ast { node = Binary left op right } env = do
       GT_EQ -> compileCompOperations CGE
   return $ left' ++ right' ++ instr
 
--- TODO: add an Unit type
 compile' Ast { node = Unary op value } env = do
     value' <- compile' value env
     let instr = case op of
@@ -179,86 +215,102 @@ compile' Ast { node = If { condition, body, elseBody } } env = do
                            ]
 
 compile' Ast { node = LetBlock assigns body } env = do
-    currDepth <- currEnvDepth
-    frameId   <- genFrameId
-    result    <- foldM mapFunc (
-            env, [], 0 :: Int, [ ]
-        ) assigns
+    currFrame <- genFrameId
+    let frameVariables = zipWith (curry $ bimap LocId toJvmType ) [1..] $ 
+                             map (type' . assignValue) assigns
 
-    prefFrame <- gets lastFrame
+    prefFrame <- startFrame currFrame frameVariables
+    depth     <- gets depth
+    result    <- foldM (mapFunc depth currFrame) (env, []) 
+                  $ zip assigns frameVariables
+
     let 
-        (newEnv, fields, _, varInstrs) = result
-        fields' = maybe fields (
-             \prefId -> ("SL", Class prefId) : fields
-            ) prefFrame
-        frameInit  = [ 
-            New frameId, 
-            InvokeSpecial $ printf "%s/<init>()V" frameId 
-         ]
-    
-    modify $ \Context{..} -> Context{ 
-            depth = currDepth + 1, 
-            lastFrame = Just frameId, 
-            classFiles = ClassFile {
-                name   = printf "Frame_%d" frameId,
-                fields = fields'
-             } : classFiles,
-            ..
-        }
+        newEnv = fst result
+        assignsInstrs   = zipWith (\ (fieldId, fieldType)  valueInstrs -> 
+                Aload 0 : valueInstrs ++ [ putFrameField currFrame fieldId fieldType ] 
+            ) frameVariables (snd result)
+        
+        staticLinkSetup = maybe [] (\ frame -> [ 
+                    Dup, Aload 0,
+                    putFrameField currFrame slLocId . Class $ show frame
+            ]) prefFrame
 
-    bodyInstrs <- compile' body newEnv
-    modify $ \Context{..} -> Context{ 
-            depth = currDepth, 
-            lastFrame, 
-            ..
-        }
-
-    return $ 
-        maybe (frameInit ++ [Astore 0] ++ varInstrs ++ bodyInstrs)
-        (\prefId -> frameInit ++ [
-                Dup, 
-                Aload 0, 
-                Putfield "SL" $ Class prefId,
-                Astore 0
-            ] ++ varInstrs ++ bodyInstrs ++ [
-                Aload 0,
-                GetField "SL" $ Class prefId,
-                Astore 0
-              ]
-             ) prefFrame
+    bodyInstrs <- compile' body newEnv 
+    endFrame prefFrame
+    return  $ [
+            New $ show currFrame,
+            Dup,
+            InvokeSpecial $ printf "%s/<init>()V" (show currFrame)
+         ] 
+        ++ staticLinkSetup
+        ++ [ Astore 0 ]
+        ++ join assignsInstrs 
+        ++ bodyInstrs
     where 
-        mapFunc (newEnv, fields, fieldId, instrs) Assigment { varName, assignValue } = do
-            envDepth   <- currEnvDepth
-            fieldInstr <- compile' assignValue newEnv
-            let
-                varType    = convertType (type' assignValue)
-                fieldName  = printf "loc_%d" fieldId
-                fieldEntry = (fieldName, varType)
-
+        mapFunc envDepth frameId (newEnv, fieldInstrs) (
+                Assigment { varName, assignValue }, (fieldId, fieldType)
+         ) = do
+            instrs  <- compile' assignValue newEnv
             return ( 
                 Map.insert varName VarLoc { 
-                        envDepth, 
-                        varType,
-                        frameLoc = fieldName 
-                    } newEnv ,
-                fieldEntry : fields,
-                fieldId + 1,
-                    instrs  
-                ++ [Dup] ++ fieldInstr 
-                ++ [ Putfield fieldName varType ]
+                        frameId, envDepth, 
+                        fieldId, fieldType -- TODO: should I remove the type?
+                    } newEnv,
+                    fieldInstrs ++ [instrs]
              )
 
-        convertType IntType  = JvmInt
-        convertType BoolType = JvmInt
-        convertType UnitType = CustomUnit
+compile' Ast { node = Var name } env = do 
+    case Map.lookup name env of 
+        Nothing -> error $ printf "BUG!! Unable to get infor for var '%s'" name
+        Just VarLoc {
+            envDepth, fieldId, 
+            fieldType, frameId
+         }      ->  do
 
--- getfields as objects and in the end do cast
--- compile' Ast { node = Var x } env = 
---     case Map.lookup x env of 
---         Just (
+         currDepth <- gets depth
+         lastFrame <- gets lastFrame
+         result    <- jumpToFrame (envDepth - currDepth)  (fromJust lastFrame)
+         return $    Aload 0 : result 
+                  ++ [ getFrameField frameId fieldId fieldType ]
+    where 
+        jumpToFrame :: Int -> FrameId -> CompilerState [Instr]
+        jumpToFrame 0 _ = return []
+        jumpToFrame distance lastFrame = do
+            frames  <- gets frames
+            let 
+               Just JvmClass { fields } = Map.lookup lastFrame frames
+               Just fieldType    = Map.lookup slLocId fields 
+               Frame currentFrame =  fieldType
+            result <- jumpToFrame (distance - 1) currentFrame
+            return $ getFrameField lastFrame slLocId (Frame currentFrame) : result
 
-currEnvDepth :: CompilerState Int
-currEnvDepth = gets depth
+startFrame :: FrameId -> [(LocId, JvmType)] -> CompilerState (Maybe FrameId)
+startFrame frameId frameVariables =  do
+    prefFrame <- gets lastFrame
+
+    -- Add an static link if needed
+    let frameClassFields = maybe frameVariables 
+            (\frame -> (slLocId, Class $ show frame) : frameVariables) prefFrame
+
+    modify $ \ Context{ .. } ->  Context { 
+        lastFrame  = Just frameId, 
+        depth      = depth + 1,
+        frames     = Map.insert frameId JvmClass {
+                name   = show frameId,
+                fields = Map.fromList frameClassFields
+            } frames,
+        ..
+    }
+
+    return prefFrame
+
+endFrame :: Maybe FrameId -> CompilerState ()
+endFrame lastFrame = 
+    modify $ \ Context { .. } -> Context {
+        depth = depth - 1,
+        lastFrame,
+        ..
+    }
 
 compileCompOperations :: Cond -> CompilerState Program
 compileCompOperations cond = do
@@ -300,28 +352,14 @@ compilePrints value typ =
 -- storeInstr BoolType  = Istore
 -- storeInstr _ = Astore
 
-genFrameId :: CompilerState String
+genFrameId :: CompilerState FrameId
 genFrameId = do
     id <- gets frameIdCount
     modify $ \Context {..} -> Context{ frameIdCount = id + 1, .. }
-    return $ printf "Frame_%d "id
+    return $ FrameId id
 
 genLabel :: CompilerState Label
 genLabel = do
     v <- gets labelCount
     modify $ \ Context {..} -> Context{ labelCount = v + 1, ..}
     return $ "L" ++ show v
-
-{-
- - What is a program now?
- -
- - TODO: for the future add methods and stuffs like that
- -
- - data JvmType   = Basic Type | Class String
- - data ClassFile = ClassFile {
- -      name   :: String,
- -      fields :: [String, Type],
- - }
- - data JvmProgram = ([Instr], [ClassFiles])
- -
- - -}
