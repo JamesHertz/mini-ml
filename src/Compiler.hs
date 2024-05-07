@@ -29,8 +29,8 @@ data JvmType    = JvmInt | JvmBool | CustomUnit | Frame FrameId |  Class String
 
 -- TODO:: Do I really need this?
 instance Show JvmType where
-    show JvmInt  = "I"
-    show JvmBool = "Z"
+    show JvmInt  = "int"
+    show JvmBool = "bool"
     show CustomUnit = "stdlib/Unit"
     show (Frame id) = show id
     show (Class name) = name

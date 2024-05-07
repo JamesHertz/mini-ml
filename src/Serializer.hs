@@ -3,7 +3,7 @@ module Serializer (
     JvmClassFile(..)
 ) where
 
-import Compiler  (Program, Instr(..), JvmProgram, JvmClass(..))
+import Compiler  (Program, Instr(..), JvmProgram, JvmClass(..), JvmType(..))
 import Data.List (intercalate)
 import Data.Char (toLower)
 import Text.Printf (printf)
@@ -81,7 +81,7 @@ serialize (instrs, classes) =
             let 
                 fileName  = name ++ ".jasm"
                 fmtFields = map (\(loc, typ) -> 
-                        printf ".field public %s %s" (show loc) (show typ) :: String
+                        printf ".field public %s %s" (show loc) (serializeType typ) :: String
                     ) $ Map.assocs fields
                 -- fmtFields' = 
                 --     if null fmtFields then fmtFields
@@ -100,7 +100,7 @@ genFileContent filename className fields =
 genMainFileContent :: String -> String -> [Instr] -> String
 genMainFileContent fileName className instrs = 
     let
-        instrsText   = unlines $ map (printf "    %s" . show) instrs
+        instrsText   = unlines $ map (printf "    %s" . serializeInstr) instrs
     in printf mainClassFormat fileName className "; no fields c:\n" instrsText
 
 serializeInstr :: Instr -> String
@@ -115,9 +115,15 @@ serializeInstr (Invoke methodSpec)        = "invokevirtual " ++ methodSpec
 serializeInstr (InvokeSpecial methodSpec) = "invokespecial " ++ methodSpec
 
 -- gets and sets
-serializeInstr (GetStatic fieldSpec typ') = printf "getstatic %s %s" fieldSpec (show typ')
-serializeInstr (PutField  fieldSpec typ') = printf "putfield %s %s" fieldSpec (show typ')
-serializeInstr (GetField  fieldSpec typ') = printf "getfield %s %s" fieldSpec (show typ')
+serializeInstr (GetStatic fieldSpec typ') = printf "getstatic %s %s" fieldSpec (serializeType typ')
+serializeInstr (PutField  fieldSpec typ') = printf "putfield %s %s"  fieldSpec (serializeType typ')
+serializeInstr (GetField  fieldSpec typ') = printf "getfield %s %s"  fieldSpec (serializeType typ')
 
 -- serializeInstr AconstNull = "aconst_null"
 serializeInstr instr      = map toLower (show instr)
+
+serializeType :: JvmType -> String
+serializeType JvmInt  = "I"
+serializeType JvmBool = "Z"
+serializeType typ     = printf "L%s;" (show typ)
+

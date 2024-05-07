@@ -30,6 +30,7 @@ main =  do
         ("editor":_) -> editorMode
         ("-c":filename:_) -> compileFile  filename
         ("-i":filename:_) -> interpretFile filename
+        _ -> usage -- TODO: add invalid something c:
 
 -- TODO: make it so that editor mode also compile to JVM
 editorMode :: IO ()
