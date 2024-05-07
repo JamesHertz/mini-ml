@@ -1,3 +1,4 @@
+{-# LANGUAGE PackageImports #-}
 module Main (main) where
 
 import Serializer
@@ -8,11 +9,15 @@ import Control.Monad (unless, foldM_, void)
 import System.IO (hFlush, stdout, hGetContents, openTempFile, hPutStrLn, stderr, print, hPutStr, hClose, putStrLn)
 import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
-import System.Directory (removeFile)
+import System.Directory (removeFile, getCurrentDirectory)
 import System.Process (rawSystem)
 import Control.Exception (try, handle)
 import System.IO.Error (isDoesNotExistError)
 import Language.Preprocessor.Cpphs (filename)
+import System.IO.Extra (withTempDir)
+import "Glob" System.FilePath.Glob (glob)
+import System.FilePath (pathSeparator)
+import Text.Printf (printf)
 
 -- constants
 lineNumberSize :: Int
@@ -85,21 +90,34 @@ compileFile filename =
         contents <- readFile filename 
         case compileProgram contents of
             Left err -> putStrLn $ formatErr contents err
-            Right program -> do
-                    mapM_ (\s -> do 
-                        putStrLn "--------\n" 
-                        putStrLn (content s)
-                     ) $ serialize program
-                        
-                    -- (name, handler) <- openTempFile "./bin" "tmp.jasm"
-                    -- hPutStr handler $ serialize program
-                    -- hFlush handler
-                    -- hClose handler
-                    --
-                    -- rawSystem "java" ["-jar", "bin/jasmin.jar", name]
+            Right program -> withTempDir $ \ baseDir -> do
+                    let subTmpFile :: String -> String
+                        subTmpFile = printf "%s%c%s" baseDir pathSeparator
 
-                    -- removeFile name
-    where 
+                    jasmFiles <- mapM (\JvmClassFile {fileName, content} -> 
+                        let 
+                            fullFileName = subTmpFile fileName
+                        in do
+                            writeFile fullFileName content
+                            putStrLn $ "file: " ++ fullFileName
+                            return fullFileName
+                     ) $ serialize program
+
+                    let classDir    = subTmpFile "classes"
+
+                    -- TODO: start compiling once and just copy them c:
+                    stdLibFiles <- glob "stdlib/*.java"
+                    rawSystem "java"  $ ["-jar", "bin/jasmin.jar", "-d", classDir ] ++ jasmFiles
+                    rawSystem "javac" $ ["-d", classDir] ++ stdLibFiles
+
+                    rawSystem "jar" [ 
+                        "--create", "--file", "bin/program.jar", -- TODO: find a way of specifying jar name
+                        "--main-class", "Main", "-C", classDir, "."
+                      ]
+
+                    putStrLn "Generated 'bin/program.jar'!"
+                    return ()
+   where 
         readHandler :: IOError -> IO a
         readHandler e 
             |  isDoesNotExistError e = printError $ "File '" ++ filename ++ "' not file."
