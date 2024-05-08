@@ -1,5 +1,5 @@
 bin/*
-!bin/*.jar
+!bin/jasmin.jar
 *.class
 *.txt
 docs/*

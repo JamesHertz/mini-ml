@@ -99,6 +99,7 @@ compileFile filename =
                             fullFileName = subTmpFile fileName
                         in do
                             writeFile fullFileName content
+                            -- TODO: add paramters for debugging c:
                             -- putStrLn $ "file: " ++ fullFileName
                             -- putStrLn content
                             -- putStrLn "------------------\n"
@@ -117,7 +118,7 @@ compileFile filename =
                         "--main-class", "Main", "-C", classDir, "."
                       ]
 
-                    putStrLn "Generated 'bin/program.jar'!"
+                    putStrLn "Saved program as 'bin/program.jar'!"
                     return ()
    where 
         readHandler :: IOError -> IO a
