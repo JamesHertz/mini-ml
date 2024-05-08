@@ -1,0 +1,6 @@
+let 
+  x = 2
+  y = (let z = x + 1 x = z * 2 in x + z end)
+in
+    println y
+end

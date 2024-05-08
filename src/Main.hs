@@ -99,7 +99,9 @@ compileFile filename =
                             fullFileName = subTmpFile fileName
                         in do
                             writeFile fullFileName content
-                            putStrLn $ "file: " ++ fullFileName
+                            -- putStrLn $ "file: " ++ fullFileName
+                            -- putStrLn content
+                            -- putStrLn "------------------\n"
                             return fullFileName
                      ) $ serialize program
 

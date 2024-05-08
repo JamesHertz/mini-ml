@@ -29,10 +29,10 @@ data JvmType    = JvmInt | JvmBool | CustomUnit | Frame FrameId |  Class String
 
 -- TODO:: Do I really need this?
 instance Show JvmType where
-    show JvmInt  = "int"
-    show JvmBool = "bool"
-    show CustomUnit = "stdlib/Unit"
-    show (Frame id) = show id
+    show JvmInt       = "I"
+    show JvmBool      = "Z"
+    show CustomUnit   = "stdlib/Unit"
+    show (Frame id)   = show id
     show (Class name) = name
 
 toJvmType :: Type -> JvmType
@@ -230,10 +230,17 @@ compile' Ast { node = LetBlock assigns body } env = do
                 Aload 0 : valueInstrs ++ [ putFrameField currFrame fieldId fieldType ] 
             ) frameVariables (snd result)
         
-        staticLinkSetup = maybe [] (\ frame -> [ 
+        (staticLinkSetup, staticLinkRestore) = maybe ([],[]) (\ frame -> (
+                [ 
                     Dup, Aload 0,
-                    putFrameField currFrame slLocId . Class $ show frame
-            ]) prefFrame
+                    putFrameField currFrame slLocId (Frame frame)
+                ],
+                [ 
+                    Aload 0,
+                    getFrameField currFrame slLocId (Frame frame),
+                    Astore 0
+                ]
+            )) prefFrame
 
     bodyInstrs <- compile' body newEnv 
     endFrame prefFrame
@@ -246,6 +253,7 @@ compile' Ast { node = LetBlock assigns body } env = do
         ++ [ Astore 0 ]
         ++ join assignsInstrs 
         ++ bodyInstrs
+        ++ staticLinkRestore
     where 
         mapFunc envDepth frameId (newEnv, fieldInstrs) (
                 Assigment { varName, assignValue }, (fieldId, fieldType)
@@ -269,7 +277,7 @@ compile' Ast { node = Var name } env = do
 
          currDepth <- gets depth
          lastFrame <- gets lastFrame
-         result    <- jumpToFrame (envDepth - currDepth)  (fromJust lastFrame)
+         result    <- jumpToFrame (currDepth - envDepth)  (fromJust lastFrame)
          return $    Aload 0 : result 
                   ++ [ getFrameField frameId fieldId fieldType ]
     where 
@@ -278,8 +286,8 @@ compile' Ast { node = Var name } env = do
         jumpToFrame distance lastFrame = do
             frames  <- gets frames
             let 
-               Just JvmClass { fields } = Map.lookup lastFrame frames
-               Just fieldType    = Map.lookup slLocId fields 
+               Just JvmClass { name, fields } = Map.lookup lastFrame frames
+               Just fieldType     = Map.lookup slLocId fields 
                Frame currentFrame =  fieldType
             result <- jumpToFrame (distance - 1) currentFrame
             return $ getFrameField lastFrame slLocId (Frame currentFrame) : result
@@ -290,7 +298,7 @@ startFrame frameId frameVariables =  do
 
     -- Add an static link if needed
     let frameClassFields = maybe frameVariables 
-            (\frame -> (slLocId, Class $ show frame) : frameVariables) prefFrame
+            (\frame -> (slLocId, Frame frame) : frameVariables) prefFrame
 
     modify $ \ Context{ .. } ->  Context { 
         lastFrame  = Just frameId, 

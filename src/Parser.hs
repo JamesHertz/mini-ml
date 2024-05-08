@@ -33,7 +33,7 @@ Context free grammar:
 <term>       ::= <factor> (( "+" | "-" ) <term>  )*
 <factor>     ::= <primary> (( "*" | "/" ) <factor> )*
 <unary>      ::= ("-"|"~"|"!"|"new") <unary> | <primary>
-<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <expr> ")" | ID 
+<primary>    ::= "true" | "false" | Num | "(" ")" | "(" <decl> ")" | ID 
                   | <ifExpr> | <printExpr> | <whileExpr>
 
 <printExpr>  ::= ("print" | "println") <expr>
@@ -148,7 +148,7 @@ primary = do
     case value token of 
         LEFT_PAREN -> 
             case' [RIGHT_PAREN] (return . (`makeAst` Unit)) $ do
-                res <- expr
+                res <- decl 
                 consume [RIGHT_PAREN] "Missing enclosing ')'."
                 return res
 
