@@ -127,8 +127,8 @@ typeCheck' ast@Ast { node = If { condition, body, elseBody } } env = do
              ctx  = typ, 
              node = If condT bodyT elseT
          }
-    maybe (makeAst UnitType Nothing) (\ast -> do
-        elseT <- typeCheck' ast env
+    maybe (makeAst UnitType Nothing) (\elseAst -> do
+        elseT <- typeCheck' elseAst env
         let bodyType = type' bodyT
             elseType = type' elseT
         if bodyType == elseType 
