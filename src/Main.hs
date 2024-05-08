@@ -75,7 +75,7 @@ interpretFile filename =
     handle readHandler $ do
         contents <- readFile filename 
         case interpretProgram contents of
-            Left err     -> putStrLn $ formatErr contents err
+            Left err     -> printError $ formatErr contents err
             Right result -> void result
     where 
         readHandler :: IOError -> IO a
@@ -89,7 +89,7 @@ compileFile filename =
         putStrLn $ "Compiling " ++ filename
         contents <- readFile filename 
         case compileProgram contents of
-            Left err -> putStrLn $ formatErr contents err
+            Left err -> printError $ formatErr contents err
             Right program -> withTempDir $ \ baseDir -> do
                     let subTmpFile :: String -> String
                         subTmpFile = printf "%s%c%s" baseDir pathSeparator
