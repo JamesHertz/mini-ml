@@ -27,7 +27,7 @@ typeCheck' Ast { node = Unit }     env = return $ Ast UnitType Unit
 typeCheck' Ast { node = Unary NEW value } env = do 
     valueT <- typeCheck' value env
     return Ast { 
-        ctx = RefType (type' valueT),
+        ctx  = RefType (type' valueT),
         node = Unary NEW valueT
     }
 

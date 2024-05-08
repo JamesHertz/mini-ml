@@ -3,7 +3,6 @@ module Interpreter (
     eval,
 )where
 
--- import Numeric (showIntAtBase)
 import Parser ( BasicAst, Ast(..), AstNode(..), Token(..), Assigment(..)  )
 import Scanner (TokenValue(..))
 import qualified Data.Map as Map
@@ -89,7 +88,7 @@ eval' Ast { node = LetBlock assigns body } env = do
 eval' Ast { node = Var name } env = 
     case Map.lookup name env of
         Just value -> return value
-        Nothing -> error "Something is wrong"
+        Nothing    -> error $ printf "BUG!! Unable to resolve variable %s" name
 
 eval' Ast { node = RefAssignment ref value } env = do
     result <- eval' ref env

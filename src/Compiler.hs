@@ -46,16 +46,11 @@ data JvmClass = JvmClass {
       fields     :: Map.Map LocId JvmType
 } deriving Show
 
--- used to store static link for frames
-slLocId :: LocId
-slLocId = LocId 0 
-
 -- helper types
 type Label = String
 type FieldSpec  = String
 type ClassSpec  = String
 type MethodSpec = String
-type TypeSpec   = String
 
 data Instr = 
       IAdd
@@ -78,35 +73,23 @@ data Instr =
 
     | Istore Int
     | Astore Int
-    | Ifeq Label -- same as if zero c:
+    | Ifeq Label
     
     | New ClassSpec
-    | InvokeSpecial MethodSpec
 
     | PutField FieldSpec JvmType
     | GetField FieldSpec JvmType
 
     | GetStatic FieldSpec JvmType
-    | Invoke       MethodSpec
-    | InvokeStatic MethodSpec
+
+    -- TODO: you might need to change the setting below
+    | Invoke        MethodSpec
+    | InvokeStatic  MethodSpec
+    | InvokeSpecial MethodSpec
     | Dup
     | Pop
-    -- | Nop -- FIXME: find a way around this
 
  deriving Show
-
--- pseudo instructions
-ifFalse :: String -> Instr
-ifFalse = Ifeq
-
-pushUnit :: Instr
-pushUnit = GetStatic "stdlib/Unit/SINGLE" CustomUnit
-
-putFrameField :: FrameId -> LocId -> JvmType -> Instr
-putFrameField frame field = PutField (printf "%s/%s" (show frame) (show field))
-
-getFrameField :: FrameId -> LocId -> JvmType -> Instr
-getFrameField frame field = GetField (printf "%s/%s" (show frame) (show field))
 
 data Cond  = CEQ | CNE | CLT | CGT | CLE | CGE
 instance Show Cond where
@@ -117,6 +100,38 @@ instance Show Cond where
   show CLE = "le"
   show CGE = "ge"
 
+-- types used to identify frames and fields locations/names
+newtype FrameId = FrameId Int deriving(Ord, Eq)
+instance Show FrameId where
+    show (FrameId id) = printf "Frame_%d" id
+
+newtype LocId = LocId Int deriving(Ord, Eq)
+instance Show LocId where
+    show (LocId id) = printf "loc_%d" id
+
+-- used to store static link for frames
+staticLinkLocId :: LocId
+staticLinkLocId = LocId 0 
+
+-- first locId used for frame fields
+frameFieldsStartLocId :: Int
+frameFieldsStartLocId = 1
+
+-- pseudo instructions
+ifFalse :: Label -> Instr
+ifFalse = Ifeq
+
+pushUnit :: Instr
+pushUnit = GetStatic "stdlib/Unit/SINGLE" CustomUnit
+
+putFrameField :: FrameId -> LocId -> JvmType -> Instr
+putFrameField frame field = PutField $ printf "%s/%s" (show frame) (show field)
+
+getFrameField :: FrameId -> LocId -> JvmType -> Instr
+getFrameField frame field = GetField $ printf "%s/%s" (show frame) (show field)
+-- end of pseudo instructions
+
+-- Types used for state monad and enviroment
 data Context = Context {
     labelCount   :: Int,
     frameIdCount :: Int,
@@ -127,24 +142,15 @@ data Context = Context {
     lastFrame    :: Maybe FrameId
  }
 
-data VarLoc  = VarLoc {
+data VarInfo  = VarInfo {
         envDepth  :: Int,
         frameId   :: FrameId,
         fieldId   :: LocId,
         fieldType :: JvmType
     } deriving Show
 
-newtype FrameId = FrameId Int deriving(Ord, Eq)
-instance Show FrameId where
-    show (FrameId id) = printf "Frame_%d" id
-
-newtype LocId = LocId Int deriving(Ord, Eq)
-instance Show LocId where
-    show (LocId id) = printf "loc_%d" id
-
-type CompilerEnv   = Map.Map String VarLoc
+type CompilerEnv   = Map.Map String VarInfo
 type CompilerState = State Context
-type Program = [Instr]
 
 -- TODO: think about this c:
 compile :: TypedAst -> JvmProgram
@@ -159,7 +165,7 @@ compile ast =
          }
     in (instrs, Map.elems $ frames state)
 
-compile' :: TypedAst -> CompilerEnv -> CompilerState Program
+compile' :: TypedAst -> CompilerEnv -> CompilerState [Instr]
 compile' Ast { node = Number n }   env = return [SIpush n]
 compile' Ast { node = Bool value } env = return [SIpush $ if value then 1 else 0] 
 compile' Ast { node = Unit }       env = return [pushUnit]
@@ -216,7 +222,7 @@ compile' Ast { node = If { condition, body, elseBody } } env = do
 
 compile' Ast { node = LetBlock assigns body } env = do
     currFrame <- genFrameId
-    let frameVariables = zipWith (curry $ bimap LocId toJvmType ) [1..] $ 
+    let frameVariables = zipWith (curry $ bimap LocId toJvmType ) [frameFieldsStartLocId..] $ 
                              map (type' . assignValue) assigns
 
     prefFrame <- startFrame currFrame frameVariables
@@ -233,11 +239,11 @@ compile' Ast { node = LetBlock assigns body } env = do
         (staticLinkSetup, staticLinkRestore) = maybe ([],[]) (\ frame -> (
                 [ 
                     Dup, Aload 0,
-                    putFrameField currFrame slLocId (Frame frame)
+                    putFrameField currFrame staticLinkLocId (Frame frame)
                 ],
                 [ 
                     Aload 0,
-                    getFrameField currFrame slLocId (Frame frame),
+                    getFrameField currFrame staticLinkLocId (Frame frame),
                     Astore 0
                 ]
             )) prefFrame
@@ -260,7 +266,7 @@ compile' Ast { node = LetBlock assigns body } env = do
          ) = do
             instrs  <- compile' assignValue newEnv
             return ( 
-                Map.insert varName VarLoc { 
+                Map.insert varName VarInfo { 
                         frameId, envDepth, 
                         fieldId, fieldType -- TODO: should I remove the type?
                     } newEnv,
@@ -270,7 +276,7 @@ compile' Ast { node = LetBlock assigns body } env = do
 compile' Ast { node = Var name } env = do 
     case Map.lookup name env of 
         Nothing -> error $ printf "BUG!! Unable to get infor for var '%s'" name
-        Just VarLoc {
+        Just VarInfo {
             envDepth, fieldId, 
             fieldType, frameId
          }      ->  do
@@ -287,10 +293,10 @@ compile' Ast { node = Var name } env = do
             frames  <- gets frames
             let 
                Just JvmClass { name, fields } = Map.lookup lastFrame frames
-               Just fieldType     = Map.lookup slLocId fields 
+               Just fieldType     = Map.lookup staticLinkLocId fields 
                Frame currentFrame =  fieldType
             result <- jumpToFrame (distance - 1) currentFrame
-            return $ getFrameField lastFrame slLocId (Frame currentFrame) : result
+            return $ getFrameField lastFrame staticLinkLocId (Frame currentFrame) : result
 
 startFrame :: FrameId -> [(LocId, JvmType)] -> CompilerState (Maybe FrameId)
 startFrame frameId frameVariables =  do
@@ -298,7 +304,7 @@ startFrame frameId frameVariables =  do
 
     -- Add an static link if needed
     let frameClassFields = maybe frameVariables 
-            (\frame -> (slLocId, Frame frame) : frameVariables) prefFrame
+            (\frame -> (staticLinkLocId, Frame frame) : frameVariables) prefFrame
 
     modify $ \ Context{ .. } ->  Context { 
         lastFrame  = Just frameId, 
@@ -320,7 +326,7 @@ endFrame lastFrame =
         ..
     }
 
-compileCompOperations :: Cond -> CompilerState Program
+compileCompOperations :: Cond -> CompilerState [Instr]
 compileCompOperations cond = do
     start <- genLabel
     end   <- genLabel
@@ -333,7 +339,7 @@ compileCompOperations cond = do
       ILabel end
      ]
 
-compilePrints :: TokenValue -> Type -> Program
+compilePrints :: TokenValue -> Type -> [Instr]
 compilePrints value typ = 
     let 
         printType              = (map toLower $ show value)
