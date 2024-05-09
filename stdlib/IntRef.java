@@ -1,3 +1,4 @@
+package stdlib;
 public class IntRef {
     public int value;
 

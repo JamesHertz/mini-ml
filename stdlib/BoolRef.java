@@ -1,5 +1,6 @@
+package stdlib;
 public class BoolRef {
-    public boolean value;
+    // public boolean value;
 
     // TODO: complete this later
     public String toString(){

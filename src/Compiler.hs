@@ -348,7 +348,7 @@ compilePrints value typ =
                 BoolType -> (Iload, Istore, "Z")
                 _        -> (Aload, Astore, "Ljava/lang/Object;")
     in  [
-            store 1, -- TODO: if this cause any problem, just save and restore aftwards
+            store 1, -- FIXME: switch order of things to get rid of this indirection
             GetStatic "java/lang/System/out" (Class "java/io/PrintStream"),
             load 1,
             Invoke $ printf "java/io/PrintStream/%s(%s)V" printType jvmType,
