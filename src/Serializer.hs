@@ -3,7 +3,7 @@ module Serializer (
     JvmClassFile(..)
 ) where
 
-import Compiler  (Program, Instr(..), JvmProgram, JvmClass(..), JvmType(..))
+import Compiler  (Instr(..), JvmProgram, JvmClass(..), JvmType(..))
 import Data.List (intercalate)
 import Data.Char (toLower)
 import Text.Printf (printf)

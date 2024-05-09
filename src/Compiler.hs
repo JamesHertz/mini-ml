@@ -2,7 +2,6 @@
 module Compiler(
     Instr(..),
     compile,
-    Program,
     Label,
     Cond(..), 
 
@@ -37,7 +36,7 @@ instance Show JvmType where
 
 toJvmType :: Type -> JvmType
 toJvmType  IntType  = JvmInt
-toJvmType  BoolType = JvmInt
+toJvmType  BoolType = JvmBool
 toJvmType  UnitType = CustomUnit
 
 data JvmClass = JvmClass {

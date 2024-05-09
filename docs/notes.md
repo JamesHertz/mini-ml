@@ -76,7 +76,7 @@ In both you will need the reference of the object on the stack and in the case o
 Yes you will something to do cast you can use the following: `checkcast <interface>`
 
 # Useful links
-- (List of JVM instruction - Wikipedia)[https://en.wikipedia.org/wiki/List_of_Java_bytecode_instructions]
-- (Jasmine Github Repo)[https://github.com/davidar/jasmin]
-- (Jasmine Official Website)[https://jasmin.sourceforge.net/]
-- (JVM specification - Oracle)[https://docs.oracle.com/javase/specs/jvms/se12/html/index.html]
+- [List of JVM instruction - Wikipedia](https://en.wikipedia.org/wiki/List_of_Java_bytecode_instructions)
+- [Jasmine Github Repo](https://github.com/davidar/jasmin)
+- [Jasmine Official Website](https://jasmin.sourceforge.net/)
+- [JVM specification - Oracle](https://docs.oracle.com/javase/specs/jvms/se12/html/index.html)
