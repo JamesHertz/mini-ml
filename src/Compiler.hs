@@ -189,13 +189,12 @@ compile' Ast { node = Binary left op right } env = do
 
 compile' Ast { node = Unary op value } env = do
     value' <- compile' value env
-    let instr = case op of
-         NOT   -> [INeg] -- FIXME: use if and iconsts c: (someday)
-         MINUS -> [INeg]
+    let (before, after) = case op of
+         NOT   -> ([], [INeg]) -- FIXME: use if and iconsts c: (someday)
+         MINUS -> ([], [INeg])
          PRINTLN -> compilePrints op (type' value)
          PRINT   -> compilePrints op (type' value)
-
-    return $ value' ++ instr
+    return $ before ++ value' ++ after
 
 compile' Ast { node = Sequence fst snd } env = do
     fst' <- compile' fst env
@@ -338,7 +337,7 @@ compileCompOperations cond = do
       ILabel end
      ]
 
-compilePrints :: TokenValue -> Type -> [Instr]
+compilePrints :: TokenValue -> Type -> ([Instr],  [Instr])
 compilePrints value typ = 
     let 
         printType              = (map toLower $ show value)
@@ -347,13 +346,13 @@ compilePrints value typ =
                 IntType  -> (Iload, Istore, "I")
                 BoolType -> (Iload, Istore, "Z")
                 _        -> (Aload, Astore, "Ljava/lang/Object;")
-    in  [
-            store 1, -- FIXME: switch order of things to get rid of this indirection
-            GetStatic "java/lang/System/out" (Class "java/io/PrintStream"),
-            load 1,
-            Invoke $ printf "java/io/PrintStream/%s(%s)V" printType jvmType,
-            pushUnit
-        ]
+    in  (
+            [ GetStatic "java/lang/System/out" $ Class "java/io/PrintStream" ],
+            [
+                Invoke $ printf "java/io/PrintStream/%s(%s)V" printType jvmType,
+                pushUnit
+            ]
+        )
                       
 -- loadInstr :: Type -> Int -> Instr
 -- loadInstr IntType   = Iload
