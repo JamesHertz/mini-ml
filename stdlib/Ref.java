@@ -1,6 +1,6 @@
 package stdlib;
-public class BoolRef {
-    // public boolean value;
+public class Ref {
+    public Object value;
 
     // TODO: complete this later
     public String toString(){

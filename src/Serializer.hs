@@ -113,11 +113,13 @@ serializeInstr (New specs)           =  "new " ++ specs
 -- invokes
 serializeInstr (Invoke methodSpec)        = "invokevirtual " ++ methodSpec
 serializeInstr (InvokeSpecial methodSpec) = "invokespecial " ++ methodSpec
+serializeInstr (InvokeStatic methodSpec)  = "invokestatic  " ++ methodSpec
 
 -- gets and sets
 serializeInstr (GetStatic fieldSpec typ') = printf "getstatic %s %s" fieldSpec (serializeType typ')
 serializeInstr (PutField  fieldSpec typ') = printf "putfield %s %s"  fieldSpec (serializeType typ')
 serializeInstr (GetField  fieldSpec typ') = printf "getfield %s %s"  fieldSpec (serializeType typ')
+serializeInstr (CheckCast classSpec) = "checkcast " ++ classSpec
 
 -- serializeInstr AconstNull = "aconst_null"
 serializeInstr instr      = map toLower (show instr)

@@ -80,7 +80,7 @@ interpretFile filename =
     where 
         readHandler :: IOError -> IO a
         readHandler e 
-            |  isDoesNotExistError e = printError $ "File '" ++ filename ++ "' not file."
+            |  isDoesNotExistError e = printError $ "File '" ++ filename ++ "' not found."
             |  otherwise = printError $ "Unexpected error: " ++ show e
 
 compileFile :: String -> IO ()
@@ -100,9 +100,9 @@ compileFile filename =
                         in do
                             writeFile fullFileName content
                             -- TODO: add paramters for debugging c:
-                            -- putStrLn $ "file: " ++ fullFileName
-                            -- putStrLn content
-                            -- putStrLn "------------------\n"
+                            putStrLn $ "file: " ++ fullFileName
+                            putStrLn content
+                            putStrLn "------------------\n"
                             return fullFileName
                      ) $ serialize program
 

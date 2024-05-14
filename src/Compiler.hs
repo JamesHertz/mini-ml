@@ -24,20 +24,36 @@ import Data.Maybe (fromJust)
 
 type JvmProgram = ([Instr], [JvmClass])
 -- TODO: think if you really want a Frame type c:
-data JvmType    = JvmInt | JvmBool | CustomUnit | Frame FrameId |  Class String
+data JvmType    = 
+      JvmInt 
+    | JvmBool 
+    | CustomRef JvmType
+    -- | CustomUnit 
+    | Frame FrameId 
+    | Class String -- I don't even know what this is doing here c:
 
 -- TODO:: Do I really need this?
 instance Show JvmType where
     show JvmInt       = "I"
     show JvmBool      = "Z"
-    show CustomUnit   = "stdlib/Unit"
-    show (Frame id)   = show id
+    show (Frame id)   = show id -- TODO: think if you really need this
     show (Class name) = name
 
+-- stdlib built classes
+stdUnit = Class "stdlib/Unit"
+stdRef  = Class "stdlib/Ref" -- TODO: complete this
+jvmIntWrapper  = Class "java/lang/Integer"
+jvmBoolWrapper = Class "java/lang/Boolean"
+jvmObjectClass = Class "java/lang/Object"
+-- jvmIntWrapper = Class "java/lang/Integer"
+
+-- javaInt = Class "java/lang/Integer"
+
 toJvmType :: Type -> JvmType
-toJvmType  IntType  = JvmInt
-toJvmType  BoolType = JvmBool
-toJvmType  UnitType = CustomUnit
+toJvmType  IntType     = JvmInt
+toJvmType  BoolType    = JvmBool
+toJvmType  UnitType    = stdUnit
+toJvmType  (RefType _) = stdRef
 
 data JvmClass = JvmClass {
       name       :: String,
@@ -48,7 +64,7 @@ data JvmClass = JvmClass {
 -- helper types
 type Label = String
 type FieldSpec  = String
-type ClassSpec  = String
+type ClassSpec  = String -- TODO: JvmType
 type MethodSpec = String
 
 data Instr = 
@@ -75,7 +91,9 @@ data Instr =
     | Ifeq Label
     
     | New ClassSpec
+    | CheckCast ClassSpec
 
+    -- FIXME: redefine this and some other instructions
     | PutField FieldSpec JvmType
     | GetField FieldSpec JvmType
 
@@ -121,13 +139,38 @@ ifFalse :: Label -> Instr
 ifFalse = Ifeq
 
 pushUnit :: Instr
-pushUnit = GetStatic "stdlib/Unit/SINGLE" CustomUnit
+pushUnit = GetStatic "stdlib/Unit/SINGLE" stdUnit
 
+invokeConstructor :: JvmType -> Instr
+invokeConstructor (Class name) = InvokeSpecial $ printf "%s/<init>()V" name
+
+wrapValue :: Type -> [Instr]
+wrapValue IntType  = [InvokeStatic "java/lang/Integer/valueOf(I)Ljava/lang/Integer;"]
+wrapValue BoolType = [InvokeStatic "java/lang/Boolean/valueOf(Z)Ljava/lang/Boolean;"]
+wrapValue _        = []
+
+unWrapValue :: Type -> [Instr]
+unWrapValue IntType  = [invokeMethod jvmIntWrapper "intValue()I"]
+unWrapValue BoolType = [invokeMethod jvmBoolWrapper "booleanValue()Z"]
+unWrapValue _  = []
+
+-- TODO: think about this
+invokeMethod :: JvmType -> MethodSpec -> Instr
+invokeMethod (Class name) spec = Invoke $ printf "%s/%s" name spec
+
+-- invokeMethod klass
+-- FIXME: delete this c:
 putFrameField :: FrameId -> LocId -> JvmType -> Instr
 putFrameField frame field = PutField $ printf "%s/%s" (show frame) (show field)
 
+-- FIXME: delete this c:
 getFrameField :: FrameId -> LocId -> JvmType -> Instr
 getFrameField frame field = GetField $ printf "%s/%s" (show frame) (show field)
+
+-- TODO: think about this thing c:
+-- getField :: JvmType -> String -> (JvmType -> Instr)
+-- getField klass field = 
+--     GetField $ printf "%s/%s" (show klass) (show field)
 -- end of pseudo instructions
 
 -- Types used for state monad and enviroment
@@ -187,15 +230,6 @@ compile' Ast { node = Binary left op right } env = do
       GT_EQ -> compileCompOperations CGE
   return $ left' ++ right' ++ instr
 
-compile' Ast { node = Unary op value } env = do
-    value' <- compile' value env
-    let (before, after) = case op of
-         NOT   -> ([], [INeg]) -- FIXME: use if and iconsts c: (someday)
-         MINUS -> ([], [INeg])
-         PRINTLN -> compilePrints op (type' value)
-         PRINT   -> compilePrints op (type' value)
-    return $ before ++ value' ++ after
-
 compile' Ast { node = Sequence fst snd } env = do
     fst' <- compile' fst env
     snd' <- compile' snd env
@@ -217,6 +251,45 @@ compile' Ast { node = If { condition, body, elseBody } } env = do
                             ++ bodyInstrs ++ [
                              Pop, ILabel l1, pushUnit
                            ]
+
+compile' Ast { node = While cond body } env = do
+    condInstrs <- compile' cond env
+    bodyInstrs <- compile' body env
+    loop <- genLabel
+    end  <- genLabel
+    return $   ILabel loop : condInstrs
+            ++ ifFalse end : bodyInstrs
+            ++ [ 
+                Pop, 
+                Goto loop, 
+                ILabel end, 
+                pushUnit 
+            ]
+
+compile' Ast { node = Unary op value } env = do
+    value' <- compile' value env
+    let (before, after) = case op of
+         NOT   -> ([], [INeg]) -- FIXME: use if and iconsts c: (someday)
+         MINUS -> ([], [INeg])
+         PRINTLN -> compilePrints op (type' value)
+         PRINT   -> compilePrints op (type' value)
+         NEW     -> compileNew $ type' value
+         BANG    -> ([], compileDeref $ type' value)
+    return $ before ++ value' ++ after
+
+compile' Ast { node = RefAssignment ref value } env = do
+    refInstrs   <- compile' ref env
+    valueInstrs <- compile' value env
+    return $   refInstrs 
+             ++ valueInstrs
+             ++ wrapValue (type' value)
+             ++ [
+                Dup,
+                Astore 1,
+                PutField (printf "%s/value" $ show stdRef) jvmObjectClass,
+                Aload 1
+             ]
+             ++ unWrapValue (type' value)
 
 compile' Ast { node = LetBlock assigns body } env = do
     currFrame <- genFrameId
@@ -354,15 +427,29 @@ compilePrints value typ =
             ]
         )
                       
--- loadInstr :: Type -> Int -> Instr
--- loadInstr IntType   = Iload
--- loadInstr BoolType  = Iload
--- loadInstr _ = Aload
---
--- storeInstr :: Type -> Int -> Instr
--- storeInstr IntType   = Istore
--- storeInstr BoolType  = Istore
--- storeInstr _ = Astore
+compileNew :: Type -> ([Instr], [Instr])
+compileNew valueType' = 
+  (
+    [
+        New $ show stdRef,
+        Dup, -- one for init
+        Dup, -- and one for put field (the last one is because its the value)
+        invokeConstructor stdRef
+    ],
+        wrapValue valueType' 
+    ++ [ PutField (printf "%s/value" $ show stdRef) jvmObjectClass ]
+  )
+
+compileDeref :: Type -> [Instr]
+compileDeref (RefType typ) = [
+    GetField (printf "%s/value" $ show stdRef) jvmObjectClass,
+    CheckCast (show castType)
+  ] ++ unWrapValue typ
+  where 
+    castType = case typ of
+        IntType  -> jvmIntWrapper 
+        BoolType -> jvmIntWrapper 
+        _        -> toJvmType typ
 
 genFrameId :: CompilerState FrameId
 genFrameId = do
