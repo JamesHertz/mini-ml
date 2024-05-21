@@ -200,7 +200,7 @@ factor = do
 
 unary :: ParserState BasicAst
 unary = do -- TODO: think about this
-    match [MINUS, NOT, NEW, BANG, PRINT, PRINTLN] call $
+    match [MINUS, NOT, NEW, BANG, PRINT, PRINTLN] unary $
        \t -> makeAst t . Unary (value t) <$> call
 
 call :: ParserState BasicAst
