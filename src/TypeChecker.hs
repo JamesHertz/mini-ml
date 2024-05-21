@@ -7,11 +7,13 @@ module TypeChecker (
 ) where
 
 import qualified Data.Map as Map
-import Control.Monad (foldM, when)
+import qualified Data.Set as Set
+import Control.Monad (foldM, when, forM, foldM_)
 import Errors  
 import Data.Profunctor.Closed (Environment(Environment))
 import Text.Printf (printf)
 import Types
+import Data.Tuple.Extra (thd3)
 
 type TypeEnv = Map.Map String Type
 -- 
@@ -73,6 +75,7 @@ typeCheck' ast@Ast { node = Binary _ N_EQ  _ } env = checkEquals ast env
 -- handling identifier c:
 -- TODO: look for a better solution
 typeCheck' Ast { node = LetBlock assigns body } env = do
+-- TODO: add support to recurtion c:
     result <- foldM mapFunc (env,[]) assigns
     bodyT  <- typeCheck' body (fst result)
     return Ast { ctx = type' bodyT, node = LetBlock (reverse $ snd result) bodyT } 
@@ -147,6 +150,41 @@ typeCheck' Ast { node = While condition body } env = do
     condT <- checkValue condition env BoolType
     bodyT <- typeCheck' body env
     return Ast { ctx = UnitType, node = While condT bodyT }
+
+-- functions stuffs
+typeCheck' Ast {node = FuncDecl pars body } env = do
+    foldM_ foldFunc Set.empty pars
+    let 
+        parsT  = fmap thd3 pars
+        newEnv = foldl (\env (name, _, typ) -> Map.insert name typ env) env pars
+    bodyT  <- typeCheck' body newEnv
+    return Ast { node = FuncDecl pars bodyT, ctx = FuncType parsT (type' bodyT)}
+    where 
+        foldFunc set (parName, Just token, _) = do
+            if Set.member parName set then 
+                makeError token $ printf "Parameter name '%s' already used" parName
+            else 
+                return $ Set.insert parName set
+        foldFunc set ("", Nothing, UnitType) = return set
+
+typeCheck' Ast { node = Call func args } env = do
+    funcT <- typeCheck' func env
+    case type' funcT of
+        FuncType expArgsT resultT -> do 
+            if length expArgsT /= length args then 
+                makeError (token func) $ printf "Function '%s' expected %d args but provided %d!" 
+                                                 (show $ type' funcT) (length expArgsT) (length args)
+            else do
+                funcArgsT <- forM (zip args expArgsT) $ \(ast, expectedType) -> do 
+                                astT <- typeCheck' ast env
+                                if type' astT == expectedType then 
+                                    return astT
+                                else -- TODO: think if you can improve this error message
+                                    makeError (token ast) $ printf "Expected '%s' type but found '%s' type." 
+                                                                   (show expectedType) (show $ type' astT) 
+
+                return  Ast { node = Call funcT funcArgsT, ctx = resultT }
+        _  -> makeError (token func) "Expected a function at the left side of a call"
 
 -- Helper function c:
 -- TODO: make check more generic so you can use it for this c:

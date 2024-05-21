@@ -3,7 +3,7 @@ module Interpreter (
     eval,
 )where
 
-import Parser ( BasicAst, Ast(..), AstNode(..), Token(..), Assigment(..)  )
+import Parser ( BasicAst, Ast(..), AstNode(..), Token(..), Assigment(..), Parameter )
 import Scanner (TokenValue(..))
 import qualified Data.Map as Map
 import Control.Monad (foldM)
@@ -12,13 +12,26 @@ import System.IO (hFlush, stdout)
 import Data.IntMap (insert)
 import Data.Bifunctor (second)
 import Text.Printf (printf)
+import TypeChecker (Type(UnitType))
+import Data.Tuple.Extra (fst3)
 
 type Enviroment  = Map.Map String Value
 
 type Address     = Int
 type MemoryCells = Map.Map Address Value
 
-data Value = IntValue Int | BoolValue Bool | Ref Address | UnitValue  deriving (Eq)
+type ParName = String
+data Value =  IntValue Int 
+            | BoolValue Bool 
+            | Ref Address 
+            | UnitValue 
+            | Closure { env            :: Enviroment, 
+                        parametersName :: [ParName], 
+                        -- TODO: add the thing below c:
+                        -- funcType   :: Type, -- used only for printing purposes c:
+                        funcBody       :: BasicAst 
+                       }
+            deriving (Eq)
 instance Show Value where
     show (IntValue  x) = show x
     show (BoolValue x) = show x
@@ -26,6 +39,7 @@ instance Show Value where
 -- and on each step choose a range to get the next address.
     show (Ref x)       = "Ref 0x" ++ printf "%x" x
     show UnitValue     = "()"
+    show Closure {}    = "yeah-its-a-function" -- TODO: make it print the function type  ....
 
 
 type EvalState = StateT (Address, MemoryCells) IO
@@ -80,15 +94,17 @@ eval' ast@Ast { node = Binary left AND right } env = evalBinary evalBool (&&) Bo
 eval' Ast { node = LetBlock assigns body } env = do
      newEnv <- foldM mapFunc env assigns
      eval' body newEnv
+    -- TODO: add support for recursion
     where 
         mapFunc map Assigment {varName, assignValue} =  do
             value <- eval' assignValue map
+            -- error $ printf "evaluated %s to %s" varName (show value)
             return $ Map.insert varName value  map
 
 eval' Ast { node = Var name } env = 
     case Map.lookup name env of
         Just value -> return value
-        Nothing    -> error $ printf "BUG!! Unable to resolve variable %s" name
+        Nothing    -> error $ printf "BUG!! Unable to resolve variable %s" name 
 
 eval' Ast { node = RefAssignment ref value } env = do
     result <- eval' ref env
@@ -99,7 +115,6 @@ eval' Ast { node = RefAssignment ref value } env = do
     return value'
 
 -- control flow
-
 eval' Ast { node = If { condition, body, elseBody } } env = do
     condValue <- evalBool condition env
     let resultValue = if condValue then eval' body env
@@ -117,6 +132,23 @@ eval' ast@Ast { node = While cond body } env = do
         eval' ast env
     else return UnitValue
 
+eval' Ast { node = FuncDecl pars funcBody } env = do
+    let parametersName = fst3 <$> pars
+    return Closure { 
+           parametersName, env, funcBody
+        }
+
+eval' Ast { node = Call func pars } env = do 
+    closure <- eval' func env
+    let 
+        Closure { env = closureEnv, parametersName = parsName, funcBody } = closure
+    newCloseEnv <- foldM addToEnv closureEnv $ zip parsName pars
+    eval' funcBody newCloseEnv
+    where 
+        addToEnv currEnv (name, value) = do 
+            value' <- eval' value env
+            return $ Map.insert name value' currEnv
+
 -- memory helper functions
 reserveCell :: Value -> EvalState Value
 reserveCell value = do
@@ -129,7 +161,7 @@ getValue address = do
     cell <- gets (Map.lookup address . snd)
     case cell of
         Just value -> return value
-        Nothing -> error $ "BUG couldn't get value for: " ++ show address
+        Nothing -> error $ "BUG couldn't get value for: " ++ show address 
 
 -- TODO: think if it is worthed to use the suggestion c:
 setValue :: Address -> Value -> EvalState ()

@@ -31,6 +31,8 @@ data TokenValue =
     | LT_EQ 
     -- ref assigment
     | ASSIGN
+    -- function start
+    | ARROW
     -- single character
     | NOT   -- tild (~)
     | COLON -- (:)
@@ -50,6 +52,7 @@ data TokenValue =
     | NEW
     | WHILE
     | DO
+    | FUN
     -- types c:
     | BOOL
     | INT
@@ -61,6 +64,7 @@ data TokenValue =
     -- values
     | Num Int
     | Id String
+    | UNIT_VALUE
     -- special c:
     | EOF
  deriving (Show, Ord, Eq)
@@ -94,7 +98,9 @@ reservedKeywors = Map.fromList [
 
      -- references tokens
      ("ref", REF),
-     ("new", NEW)
+     ("new", NEW),
+
+     ("fun", FUN)
     ]
 
 data Context = Context {
@@ -128,18 +134,18 @@ tokenize' = do
         value <- case char of
                    -- arithmetic
                    '+' -> return PLUS
-                   '-' -> return MINUS
                    '*' -> return TIMES
                    '/' -> return SLASH
 
-                   '(' -> return LEFT_PAREN
                    ')' -> return RIGHT_PAREN
 
                    -- other single chars
                    '~' -> return NOT
                    ';' -> return SEMI_COLON
 
-                   -- comparison & refs tokens
+                   -- functions & comparison & refs tokens
+                   '(' -> match ')' UNIT_VALUE LEFT_PAREN 
+                   '-' -> match '>' ARROW MINUS 
                    '>' -> match '=' GT_EQ GT' 
                    '<' -> match '=' LT_EQ LT'
                    '=' -> match '=' EQ_EQ EQ'

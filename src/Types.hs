@@ -5,18 +5,20 @@ module Types (
     TokenValue(..)
 ) where
 import Scanner (Token(..), TokenValue(..))
+import Data.List (intercalate)
 
 -- Major types
 type TypedAst = Ast Type
 type BasicAst = Ast Token
 
 -- supported types
-data Type = IntType | BoolType | UnitType | RefType Type deriving (Eq)
+data Type = IntType | BoolType | UnitType | RefType Type | FuncType [Type] Type deriving (Eq)
 instance Show Type where
     show IntType       = "int"
     show BoolType      = "bool"
     show UnitType      = "unit"
     show (RefType typ) = "ref " ++ show typ
+    show (FuncType pars result) = intercalate " -> " $ map show pars ++ [show result]
 
 type TypeToken   = Token
 type TypeContext = (Type, TypeToken)
@@ -74,11 +76,15 @@ Unit
 
  -}
 
+-- TODO: create a type that will encapsulate both a string and token
+type Parameter = (String, Maybe Token, Type)
 -- TODO: think about making this a functor (which will probably simplify typeCheck)
 data Ast a     = Ast { ctx :: a, node :: AstNode a } deriving (Eq, Show)
 data AstNode a = 
             Binary   (Ast a)  TokenValue (Ast a)
           | Unary    TokenValue (Ast a)
+          | FuncDecl  [Parameter] (Ast a)
+          | Call (Ast a) [Ast a]
           | LetBlock [Assigment a] (Ast a)
           | RefAssignment (Ast a) (Ast a)
           | If { condition :: Ast a, body :: Ast a, elseBody :: Maybe (Ast a) }
