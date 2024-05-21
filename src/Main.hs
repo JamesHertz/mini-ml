@@ -100,9 +100,9 @@ compileFile filename =
                         in do
                             writeFile fullFileName content
                             -- TODO: add paramters for debugging c:
-                            putStrLn $ "file: " ++ fullFileName
-                            putStrLn content
-                            putStrLn "------------------\n"
+                            -- putStrLn $ "file: " ++ fullFileName
+                            -- putStrLn content
+                            -- putStrLn "------------------\n"
                             return fullFileName
                      ) $ serialize program
 

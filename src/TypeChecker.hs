@@ -91,7 +91,7 @@ typeCheck' Ast { node = LetBlock assigns body } env = do
                     return result
                 else makeError token $ 
                         printf "Expected '%s' type, but expression produced '%s' type."
-                                (show valueType) (show typ)
+                               (show typ) (show valueType)
                 ) expectedType
 
 typeCheck' ast@Ast { node = Var name } env = 

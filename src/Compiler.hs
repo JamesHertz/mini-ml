@@ -11,6 +11,9 @@ module Compiler(
     LocId
 ) where
 
+-- TODO: 
+--      - once you finish it all just come here and do some general refactoring c:
+--      - reverse your decistion to use Ref to RefObject, RefInt and RefBool | or RefObject and RefPrimitive c:
 import Types 
 import Control.Monad.State (State, runState, gets, put, modify, foldM, join, when)
 import Errors (Result)
@@ -28,15 +31,13 @@ data JvmType    =
       JvmInt 
     | JvmBool 
     | CustomRef JvmType
-    -- | CustomUnit 
     | Frame FrameId 
     | Class String -- I don't even know what this is doing here c:
 
--- TODO:: Do I really need this?
 instance Show JvmType where
     show JvmInt       = "I"
     show JvmBool      = "Z"
-    show (Frame id)   = show id -- TODO: think if you really need this
+    show (Frame id)   = show id
     show (Class name) = name
 
 -- stdlib built classes
@@ -45,9 +46,6 @@ stdRef  = Class "stdlib/Ref" -- TODO: complete this
 jvmIntWrapper  = Class "java/lang/Integer"
 jvmBoolWrapper = Class "java/lang/Boolean"
 jvmObjectClass = Class "java/lang/Object"
--- jvmIntWrapper = Class "java/lang/Integer"
-
--- javaInt = Class "java/lang/Integer"
 
 toJvmType :: Type -> JvmType
 toJvmType  IntType     = JvmInt
@@ -158,20 +156,14 @@ unWrapValue _  = []
 invokeMethod :: JvmType -> MethodSpec -> Instr
 invokeMethod (Class name) spec = Invoke $ printf "%s/%s" name spec
 
--- invokeMethod klass
--- FIXME: delete this c:
-putFrameField :: FrameId -> LocId -> JvmType -> Instr
-putFrameField frame field = PutField $ printf "%s/%s" (show frame) (show field)
+putField :: Show a => JvmType -> a -> JvmType -> Instr
+putField klass field = PutField $ printf "%s/%s" (show klass) (show field)
 
--- FIXME: delete this c:
-getFrameField :: FrameId -> LocId -> JvmType -> Instr
-getFrameField frame field = GetField $ printf "%s/%s" (show frame) (show field)
+getField :: Show a => JvmType -> a -> JvmType -> Instr
+getField klass field = GetField $ printf "%s/%s" (show klass) (show field)
 
--- TODO: think about this thing c:
--- getField :: JvmType -> String -> (JvmType -> Instr)
--- getField klass field = 
---     GetField $ printf "%s/%s" (show klass) (show field)
--- end of pseudo instructions
+getFrameField frame = getField (Frame frame)
+putFrameField frame = putField (Frame frame)
 
 -- Types used for state monad and enviroment
 data Context = Context {
