@@ -13,7 +13,8 @@ import Errors
 import Data.Profunctor.Closed (Environment(Environment))
 import Text.Printf (printf)
 import Types
-import Data.Tuple.Extra (thd3)
+import Data.Tuple.Extra (thd3, third3)
+import Data.Maybe (fromJust)
 
 type TypeEnv = Map.Map String Type
 -- 
@@ -152,20 +153,22 @@ typeCheck' Ast { node = While condition body } env = do
     return Ast { ctx = UnitType, node = While condT bodyT }
 
 -- functions stuffs
-typeCheck' Ast {node = FuncDecl pars body } env = do
+-- FIXME: propery handle this c:
+typeCheck' Ast {node = FuncDecl pars' body } env = do
+    let pars = fmap (third3 fromJust) pars'
     foldM_ foldFunc Set.empty pars
     let 
         parsT  = fmap thd3 pars
         newEnv = foldl (\env (name, _, typ) -> Map.insert name typ env) env pars
     bodyT  <- typeCheck' body newEnv
-    return Ast { node = FuncDecl pars bodyT, ctx = FuncType parsT (type' bodyT)}
+    return Ast { node = FuncDecl pars' bodyT, ctx = FuncType parsT (type' bodyT)}
     where 
-        foldFunc set (parName, Just token, _) = do
+        foldFunc set ("", _, UnitType)   = return set
+        foldFunc set (parName, token, _) = do
             if Set.member parName set then 
                 makeError token $ printf "Parameter name '%s' already used" parName
             else 
                 return $ Set.insert parName set
-        foldFunc set ("", Nothing, UnitType) = return set
 
 typeCheck' Ast { node = Call func args } env = do
     funcT <- typeCheck' func env

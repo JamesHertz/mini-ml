@@ -68,26 +68,32 @@ decl = case' [LET]   letBlock  $
 funDecl :: Token -> ParserState BasicAst
 funDecl funKeyword = do 
     -- TODO: add support for free variables c:
-    params <- case' [UNIT_VALUE] (const $ return [("", Nothing, UnitType)]) $
-              case' [LEFT_PAREN] (const funParams) $
-               makeError "Expected either '()' or variable declaration."
+    params <- case' [UNIT_VALUE] (\t -> return [("", t, Just UnitType)]) $
+              case' [LEFT_PAREN, Id ""] funParams $
+              makeError "Expected either '()' or variable declaration."
 
     consume [ARROW] "Expected '->' before function body!"
     result  <- makeAst funKeyword . FuncDecl params <$> decl
     consume [END] "Expected 'end' at the end of function declaration."
     return result
 
-funParams :: ParserState [Parameter]
-funParams = do
+funParams :: Token -> ParserState [Parameter]
+funParams prev = do
     -- TODO: think about being able to type the return type like this: `fun (x : int) : int -> x * 10 end`
-    par <- consume [Id ""] "Expected function parameter name after '(' in function declaration."
-    consume [COLON] "Expected ':' after parameter name."
-    typeInfo <- parseType
-    consume [RIGHT_PAREN] "Expected enclosing ')' after function parameter name and type."
-    rest <- match [LEFT_PAREN] (return []) $ const funParams
+    entry <- case value prev of 
+               LEFT_PAREN -> 
+                do
+                    par <- consume [Id ""] "Expected function parameter name after '(' in function declaration."
+                    consume [COLON] "Expected ':' after parameter name."
+                    typeInfo <- parseType
+                    consume [RIGHT_PAREN] "Expected enclosing ')' after function parameter name and type."
+                    let (Id varName) = value par
+                    return (varName, prev, Just $ fst typeInfo)
+               Id name    -> return (name, prev, Nothing)
 
-    let Token { value = Id paramName } = par
-    return $ (paramName, Just par, fst typeInfo) : rest
+    rest <- match [LEFT_PAREN, Id ""] (return []) funParams
+    return $ entry : rest
+
 
 letBlock :: Token ->  ParserState BasicAst
 letBlock letKeyword = do

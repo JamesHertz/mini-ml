@@ -77,7 +77,7 @@ Unit
  -}
 
 -- TODO: create a type that will encapsulate both a string and token
-type Parameter = (String, Maybe Token, Type)
+type Parameter = (String, Token, Maybe Type)
 -- TODO: think about making this a functor (which will probably simplify typeCheck)
 data Ast a     = Ast { ctx :: a, node :: AstNode a } deriving (Eq, Show)
 data AstNode a = 
