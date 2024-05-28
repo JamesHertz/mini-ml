@@ -1,0 +1,7 @@
+let 
+  apply = fun (value : unit -> int) (x : int) -> 
+             value () + x
+          end
+in
+   apply (fun () -> 11 end) 10 + apply (fun (y:unit) -> 12 end) 10
+end
