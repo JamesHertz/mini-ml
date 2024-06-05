@@ -1,6 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 module Unification where
 
+
+
 import qualified Data.Map as Map
 -- import qualified Types as Utils
 import Control.Monad.State (State, get, put, evalState, gets, modify, runState)
@@ -10,22 +12,24 @@ import Types (
   TokenValue(..),  Type(..), GenId, type',
   token, Assigment (Assigment, assignValue, expectedType, varName)
   )
-import Distribution.Compat.CharParsing (letter)
 
+import Data.Set (fromList, toList)
 import UnionFind (TypedUnionFind, newRepr, setReprType, union)
 import qualified UnionFind as Uf
+import qualified Data.Set as Set
 import Data.Biapplicative (first, Bifunctor (bimap))
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.Trans.Except (throwE)
-import Data.Maybe (fromMaybe, isNothing)
+import Data.Maybe (fromMaybe, isNothing, fromJust)
 import Text.Printf (printf)
 import Control.Monad (foldM, join)
+import Control.Comonad.Env (env)
+import Data.Tuple.Extra (thd3)
 
 type ExpectedType = Type
 type Constraints  = [(Type, ExpectedType, Token)]
 
 type TypeEnv   = Map.Map String Type
--- type Context   = Int
 type ConsState = ExceptT Error (State Int) 
 
 typeCheck :: BasicAst -> Result TypedAst
@@ -35,8 +39,6 @@ typeCheck ast = do
     (ast', constrs) <- value
     subs   <- unify constrs 
     return $ applySubstitution ast' subs 
-
-
 
 calcConstraints :: BasicAst -> TypeEnv -> ConsState (TypedAst, Constraints)
 calcConstraints Ast { node = Number x } env = return' Ast { ctx = IntType,  node = Number x }
@@ -57,38 +59,177 @@ calcConstraints ast@Ast { node = Binary _ AND _ } env = genLogicalConstraints as
 calcConstraints ast@Ast { node = Binary _ OR  _ } env = genLogicalConstraints ast env
 
 calcConstraints ast@Ast { node = Binary _ EQ_EQ _ } env = genEqualityConstraints ast env
-calcConstraints ast@Ast { node = Binary _ N_EQ  _ } env = genEqualityConstraints ast env
+calcConstraints ast@Ast { node = Binary _  N_EQ _ } env = genEqualityConstraints ast env
+
+calcConstraints ast@Ast { node = Unary op value } env = do 
+  (valueAst, cons) <- calcConstraints value env
+  (retType, unaryCons) <- case op of 
+                              MINUS   -> return (IntType,  [(type' valueAst, IntType, token value)])
+                              NOT     -> return (BoolType, [(type' valueAst, BoolType, token value)])
+                              PRINTLN -> return (UnitType, [])
+                              PRINT   -> return (UnitType, [])
+                              NEW     -> return (RefType $ type' valueAst, [])
+                              BANG    -> do 
+                                var <- freshVar
+                                return (TypeVar var, [(type' valueAst, RefType $ TypeVar var, token value)])
+
+  return (Ast { ctx = retType, node = Unary op valueAst }, cons ++ unaryCons)
+
+-- control flow
+calcConstraints ast@Ast { node = If { condition, body, elseBody } } env = do 
+  (condAst, condCons) <- calcConstraints condition env
+  (bodyAst, bodyCons) <- calcConstraints body env
+  (elseAst, elseCons, retType) <- maybe (return (Nothing, [], UnitType)) (\ast -> do 
+    (elseAst, elseCons) <- calcConstraints ast env
+    return (
+        Just elseAst, 
+        elseCons ++ [(type' elseAst, type' bodyAst, token ast)],
+        type' bodyAst
+      )
+   ) elseBody
+  
+  return (Ast { ctx = retType, node = If condAst bodyAst elseAst }, condCons ++ bodyCons ++ elseCons)
+
+calcConstraints ast@Ast { node = While cond body } env = do 
+  (condAst, condCons) <- calcConstraints cond env
+  (bodyAst, bodyCons) <- calcConstraints body env
+  return (
+    Ast { ctx = UnitType, node = While condAst bodyAst},
+       condCons 
+    ++ bodyCons
+    ++ [ (type' condAst, BoolType, token cond) ]
+   )
+
+calcConstraints ast@Ast { node = Sequence fst snd } env = do 
+  (fstAst, fstCons) <- calcConstraints fst env
+  (sndAst, sndCons) <- calcConstraints snd env
+  return ( Ast { ctx = type' sndAst, node = Sequence fstAst sndAst }, fstCons ++ sndCons )
+
+-- functions stuffs 
+calcConstraints ast@Ast { node = FuncDecl pars body } env = do 
+  (newPars, _ ) <- foldM (\(arr, set) (name, token, parType) -> 
+      if Set.member name set then 
+         makeError token $ printf "Parameter name '%s' already used" name
+      else do 
+        typ <- case parType of 
+                Just t  -> return t 
+                Nothing -> TypeVar <$> freshVar 
+        return ((name, token, Just typ) : arr, Set.insert name set)
+    ) ([], Set.empty) pars
+
+  let 
+    newPars' = reverse newPars
+    newEnv   = foldl (\ env (name, _, Just parType) -> Map.insert name parType env ) env newPars'
+  (bodyAst, bodyCons) <- calcConstraints body newEnv
+
+  return (Ast { 
+      ctx = FuncType (fromJust . thd3 <$> newPars') (type' bodyAst ), 
+      node = FuncDecl newPars' bodyAst }, 
+      bodyCons 
+    )
 
 calcConstraints ast@Ast { node = Call func args } env = do 
-    funcC <- calcConstraints func env
+    (funcAst, funcCons) <- calcConstraints func env
     argsC <- mapM (`calcConstraints` env) args
 
     let 
-      (funcAst, funcCons) = funcC
       argsAst  = fst <$> argsC
       argsCons = argsC >>= snd
 
-    newFuncAst <- case type' funcAst of 
-                      FreeType freeVars (FuncType args ret) -> do
-                        map <- foldM (\ m tp ->  do
-                                new <- freshVar
-                                return $ Map.insert (TypeVar tp) (TypeVar new) m
-                              ) Map.empty freeVars
-                        let newType = FuncType (replaceType map <$> args) $ replaceType map ret
-                        return Ast { ctx = newType, node = node funcAst }
-                      tp   -> return funcAst
     retType <- freshVar
     return (
-        Ast { ctx = TypeVar retType, node = Call newFuncAst argsAst } , 
+        Ast { ctx = TypeVar retType, node = Call funcAst argsAst } , 
         (type' funcAst, FuncType (type' <$> argsAst) (TypeVar retType), token func) : argsCons
+     )
+
+-- identifiers & ref
+calcConstraints ast@Ast { node = LetBlock assigns body } env = do
+   (newEnv, assignsInfo) <- foldM mapFunc (env,[]) assigns
+   let 
+      newAssigns =  fst <$> reverse assignsInfo
+      cons       =  snd <$> reverse assignsInfo
+   (bodyAst, bodyCons) <- calcConstraints body newEnv
+   return (Ast {
+        ctx  = type' bodyAst,
+        node = LetBlock newAssigns bodyAst
+     }, join cons ++ bodyCons )
+ where 
+   -- mapFunc :: (TypeEnv, [(Assigment Type, Constraints)]) -> Assigment Token -> ConsState (TypeEnv, [(Assigment Type, Constraints)]) 
+   mapFunc (env, arr) Assigment { 
+         varName, assignValue = func@(Ast { node = FuncDecl _ _ }),  expectedType 
+        } = do
+      var <- freshVar
+      (funcAst, funcCons) <- calcConstraints func $ Map.insert varName (TypeVar var) env
+      let
+          funcCons'   = maybe funcCons (\(typ, token) -> funcCons ++ [(TypeVar var, typ, token)] ) expectedType
+          -- FIXME: a way to get a token for this ...
+          unifyResult = unify $ (TypeVar var, type' funcAst, token func) : funcCons'
+      case unifyResult of
+          Left err -> throwE err
+          _ -> return ()
+
+      let 
+        Right uf  = unifyResult
+        funcBody  = applySubstitution funcAst uf
+        funcType  = replaceType (type' funcAst) uf
+        freeVars  = deduplicate . filter (olderThan var) $ typeVarsOf funcType
+        transCons = (\(f,s,t) -> (replaceType f uf, replaceType s uf, t)) <$> funcCons
+        cons      = filter (\(fst, snd, _ ) -> 
+            not . any (olderThan var) $ typeVarsOf fst ++ typeVarsOf snd 
+          ) transCons
+        valueType = FreeType freeVars funcType
+      return (
+          Map.insert varName valueType env,
+          ( Assigment { 
+              varName, 
+              expectedType = Nothing, -- no need anymore
+              assignValue  = Ast { ctx = valueType, node = node funcBody }
+            }, cons) : arr 
         )
-    where 
-      replaceType m t = fromMaybe t $ Map.lookup t m
+       
+   mapFunc (env, arr) Assigment { varName, assignValue,  expectedType } = do
+      (valueAst, valueCons) <- calcConstraints assignValue env
+      return (
+          Map.insert varName (type' valueAst) env,
+           ( 
+              Assigment { varName, expectedType = Nothing, assignValue = valueAst },
+              maybe valueCons (\(typ, token) -> (type' valueAst, typ, token) : valueCons) expectedType
+           )  : arr
+       )
+      
+   olderThan y x = length x > length y || length x == length y && x >= y
+   typeVarsOf (FuncType args ret) = (args >>= typeVarsOf) ++ typeVarsOf ret
+   typeVarsOf (TypeVar x) = [x]
+   typeVarsOf (RefType x) = typeVarsOf x
+   typeVarsOf typ = []
 
 calcConstraints ast@Ast { node = Var name } env = 
+  -- TODO: instanciate free vars ...
   case Map.lookup name env of 
       Nothing  -> makeError (token ast) $ printf "Undefined identifier: '%s'" name
+      Just (FreeType freeVars func) -> do
+        uf <- foldM (\ uf free ->  do
+              -- TODO: general local and global vars c:
+              new <- freshVar
+              return $ newRepr free (TypeVar new) uf
+            ) Uf.empty freeVars
+        let newType = replaceType func uf
+        return (Ast { ctx = newType, node = Var name }, [])
       Just ti  -> return (Ast { ctx = ti, node = Var name }, [])
+
+calcConstraints ast@Ast { node = RefAssignment ref value } env = do
+  (refAst, refCons)     <- calcConstraints ref env
+  (valueAst, valueCons) <- calcConstraints value env
+  var <- freshVar
+  return (
+    Ast { ctx = TypeVar var, node = RefAssignment refAst valueAst },
+       refCons
+    ++ valueCons
+    ++ [
+      (type' valueAst, TypeVar var, token value),
+      (type' refAst, RefType $ TypeVar var, token ref)
+    ]
+   )
 
 -- FIXME: refactor to function to in Error.hs
 makeError :: Token -> String -> ConsState a
@@ -100,10 +241,11 @@ makeError Token { Types.line, Types.position } msg =
             Errors.position = position 
         }
 
+
 freshVar :: ConsState GenId
 freshVar  = do 
     idx <- get 
-    let var = "x" ++ show idx
+    let var = "g" ++ show idx
     modify  (+1) 
     return var
 
@@ -160,35 +302,31 @@ unifyConstraints ((t1, t2, token):xs) uf =
      (t1', uf')  = updateType t1 uf
      (t2', uf'') = updateType t2 uf'
   in case (t1', t2') of 
-      -- TODO: refactor this
-      (TypeVar x, FuncType args ret) | t1' `appearsIn` [t2'] ->
-          makeError' token $ printf "Couldn't match '%s' with '%s'" (show t1') (show t2')
-
-      (FuncType args ret, TypeVar x) | t2' `appearsIn` [t1'] ->
-          makeError' token $ printf "Couldn't match '%s' with '%s'" (show t1') (show t2')
-
+      (x, y) | x == y -> unifyConstraints xs uf'' 
+-- TODO: think about error messages
       (TypeVar x, TypeVar y) ->
           unifyConstraints xs (union x y uf'')
 
-      (TypeVar x, y) ->
+      (TypeVar x, y) | not $  t1' `appearsIn` [y] ->
           unifyConstraints xs (setReprType x y uf'')
 
-      (x, TypeVar y) ->
+      (x, TypeVar y) | not $ t2' `appearsIn` [x] ->
           unifyConstraints xs (setReprType y x uf'')
 
-      -- FIXME: find a solution for this
-      (FuncType args1 ret1, FuncType args2 ret2) ->
+      -- TODO: handle token better
+      (FuncType args1 ret1, FuncType args2 ret2) | length args1 == length args2 ->
         unifyConstraints (zipWith (,,token) (ret1 : args1) (ret2 : args2) ++ xs) uf'' 
 
-      (x, y) -> 
-        if x == y then 
-          unifyConstraints xs uf'' 
-        else 
-          makeError' token $ printf "Couldn't match '%s' with '%s'" (show x) (show y)
+      (RefType x, RefType y) ->
+        unifyConstraints ((x, y, token) : xs) uf''
+
+      -- FIXME: do some special matches for better error messages
+      _ -> makeError' token $ printf "Couldn't match `%s` with `%s`" (show t1') (show t2')  
   where 
     appearsIn typ [] = False
     appearsIn typ (FuncType args ret : xs) = appearsIn typ (ret : args) || appearsIn typ xs
-    appearsIn typ (x:xs) = x == typ || appearsIn typ xs
+    appearsIn typ (RefType tp : xs)        = tp == typ || appearsIn typ xs
+    appearsIn typ (x:xs)                   =  x == typ || appearsIn typ xs
 
 updateType t@(TypeVar x) uf = maybe (t, newRepr x t uf) (,uf) $ Uf.lookupRepr x uf
 updateType (FuncType args ret) uf = 
@@ -202,7 +340,9 @@ updateType (FuncType args ret) uf =
       ret':args' = updatedTypes
     in 
       (FuncType args' ret', uf')
+
 updateType (FreeType _ tp) uf = updateType tp uf
+updateType (RefType tp)    uf = first RefType $ updateType tp uf
 updateType t uf = (t, uf)
 
 {- TYPE SUBSTITUION -}
@@ -259,6 +399,8 @@ replaceType :: Type -> TypedUnionFind -> Type
 replaceType t@(TypeVar x)       uf = fromMaybe t $ Uf.lookupRepr x uf
 replaceType (FuncType args ret) uf = ((`replaceType` uf) <$> args) `FuncType` replaceType ret uf
 replaceType (FreeType _ tp)     uf = replaceType tp uf
+replaceType (RefType tp)        uf = RefType $ replaceType tp uf
+replaceType tp uf = tp
 
 makeError' :: Token -> String -> Result a
 makeError' Token { Types.line, Types.position } msg = 
@@ -268,3 +410,5 @@ makeError' Token { Types.line, Types.position } msg =
             Errors.line     = line, 
             Errors.position = position 
         }
+
+deduplicate = toList . fromList

@@ -79,6 +79,8 @@ LetBlock _ _
 RefAssignment _
 If { condition, body, elsebody }
 Sequence _ _ 
+Call _ _ 
+FuncDecl _ _ 
 
 -- primary nodes
 Number _ 

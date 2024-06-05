@@ -108,6 +108,7 @@ letAssigments = do
     expectedType <- match [COLON] (return Nothing) $ const (Just <$> parseType)
     
     consume [EQ'] "Expected '=' after variable name."
+
     assignValue  <- decl
 
     let 
@@ -209,6 +210,7 @@ unary = do -- TODO: think about this
     match [MINUS, NOT, NEW, BANG, PRINT, PRINTLN] call $
        \t -> makeAst t . Unary (value t) <$> unary
 
+-- FIXME: fix this later
 call :: ParserState BasicAst
 call = do 
     func <- primary

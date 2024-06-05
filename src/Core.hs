@@ -5,7 +5,8 @@ import Compiler (compile, JvmProgram(..))
 import Interpreter (eval, Value (..))
 import Scanner (tokenize)
 import Parser (parse)
-import TypeChecker (typeCheck)
+-- import TypeChecker (typeCheck)
+import Unification (typeCheck)
 
 compileProgram :: String -> Result JvmProgram
 compileProgram src = do
