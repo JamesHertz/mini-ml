@@ -94,11 +94,21 @@ eval' ast@Ast { node = Binary left AND right } env = evalBinary evalBool (&&) Bo
 eval' Ast { node = LetBlock assigns body } env = do
      newEnv <- foldM mapFunc env assigns
      eval' body newEnv
-    -- TODO: add support for recursion
     where 
+        mapFunc map Assigment {varName, assignValue = func@(Ast { node = FuncDecl _ _ }) } =  do
+            value <- eval' func map
+            let 
+              Closure { env, parametersName, funcBody } = value
+              -- sending state from the future to the past
+              newMap = Map.insert varName Closure {
+                    env = newMap,
+                    parametersName,
+                    funcBody
+                } map
+            return newMap
+
         mapFunc map Assigment {varName, assignValue} =  do
             value <- eval' assignValue map
-            -- error $ printf "evaluated %s to %s" varName (show value)
             return $ Map.insert varName value  map
 
 eval' Ast { node = Var name } env = 
