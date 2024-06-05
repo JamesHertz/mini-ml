@@ -163,17 +163,11 @@ unifyConstraints ((t1, t2, token):xs) uf =
      (t2', uf'') = updateType t2 uf'
   in case (t1', t2') of 
       -- TODO: refactor this
-      (TypeVar x, FuncType args ret) ->
-        if t1' `elem` ret : args then 
+      (TypeVar x, FuncType args ret) | t1' `appearsIn` [t2'] ->
           makeError' token $ printf "Couldn't match '%s' with '%s'" (show t1') (show t2')
-        else 
-          unifyConstraints xs (setReprType x t2' uf'')
 
-      (FuncType args ret, TypeVar x) ->
-        if t1' `elem` ret : args then 
+      (FuncType args ret, TypeVar x) | t2' `appearsIn` [t1'] ->
           makeError' token $ printf "Couldn't match '%s' with '%s'" (show t1') (show t2')
-        else 
-          unifyConstraints xs (setReprType x t2' uf'')
 
       (TypeVar x, TypeVar y) ->
           unifyConstraints xs (union x y uf'')
@@ -193,9 +187,12 @@ unifyConstraints ((t1, t2, token):xs) uf =
           unifyConstraints xs uf'' 
         else 
           makeError' token $ printf "Couldn't match '%s' with '%s'" (show x) (show y)
-    
-      
+  where 
+    appearsIn typ [] = False
+    appearsIn typ (FuncType args ret : xs) = appearsIn typ (ret : args) || appearsIn typ xs
+    appearsIn typ (x:xs) = x == typ || appearsIn typ xs
 
+    
 
   -- if (TypeVar x) `elem` ret : args then 
   --     makeError token $ printf "Couldn't match '%s' with '%s'" (TypeVar x) (FuncType args ret)
