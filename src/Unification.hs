@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Unification where
 
 import qualified Data.Map as Map
@@ -7,7 +8,7 @@ import Errors
 import Types (
   Ast(..), AstNode(..), BasicAst, Token(..),  TypedAst,
   TokenValue(..),  Type(..), GenId, type',
-  token
+  token, Assigment (Assigment, assignValue, expectedType, varName)
   )
 import Distribution.Compat.CharParsing (letter)
 
@@ -36,9 +37,6 @@ typeCheck ast = do
     return $ applySubstitution ast' subs 
 
 
-      
-applySubstitution :: TypedAst -> TypedUnionFind -> TypedAst
-applySubstitution ast _ = ast
 
 calcConstraints :: BasicAst -> TypeEnv -> ConsState (TypedAst, Constraints)
 calcConstraints Ast { node = Number x } env = return' Ast { ctx = IntType,  node = Number x }
@@ -178,7 +176,7 @@ unifyConstraints ((t1, t2, token):xs) uf =
       (x, TypeVar y) ->
           unifyConstraints xs (setReprType y x uf'')
 
-      -- TODO: look at this c:
+      -- FIXME: find a solution for this
       (FuncType args1 ret1, FuncType args2 ret2) ->
         unifyConstraints (zipWith (,,token) (ret1 : args1) (ret2 : args2) ++ xs) uf'' 
 
@@ -192,13 +190,6 @@ unifyConstraints ((t1, t2, token):xs) uf =
     appearsIn typ (FuncType args ret : xs) = appearsIn typ (ret : args) || appearsIn typ xs
     appearsIn typ (x:xs) = x == typ || appearsIn typ xs
 
-    
-
-  -- if (TypeVar x) `elem` ret : args then 
-  --     makeError token $ printf "Couldn't match '%s' with '%s'" (TypeVar x) (FuncType args ret)
-  -- else 
-  --     return unifyConstraints ()
-
 updateType t@(TypeVar x) uf = maybe (t, newRepr x t uf) (,uf) $ Uf.lookupRepr x uf
 updateType (FuncType args ret) uf = 
   let 
@@ -211,9 +202,63 @@ updateType (FuncType args ret) uf =
       ret':args' = updatedTypes
     in 
       (FuncType args' ret', uf')
-updateType (FreeType _ tp) uf = (tp, uf)
+updateType (FreeType _ tp) uf = updateType tp uf
 updateType t uf = (t, uf)
 
+{- TYPE SUBSTITUION -}
+applySubstitution :: TypedAst -> TypedUnionFind -> TypedAst
+applySubstitution Ast { ctx,  node = Binary left op right} uf = Ast {
+    ctx = replaceType ctx uf, node = Binary (applySubstitution left uf) op (applySubstitution right uf)
+  }
+
+applySubstitution Ast { ctx,  node = Unary op value } uf = Ast {
+    ctx = replaceType ctx uf, node = Unary op (applySubstitution value uf) 
+  }
+
+applySubstitution Ast { ctx,  node = FuncDecl args body } uf = Ast {
+    ctx = replaceType ctx uf, node = FuncDecl (mapFunc <$> args ) (applySubstitution body uf) 
+  }
+  where 
+    mapFunc (name, token, Just typ) =  (name, token, Just $ replaceType typ uf)
+
+applySubstitution Ast { ctx,  node = Call func args } uf = Ast {
+    ctx = replaceType ctx uf, node = Call (applySubstitution func uf) $ (`applySubstitution` uf) <$> args
+  }
+
+applySubstitution Ast { ctx,  node = LetBlock decls body } uf = Ast {
+    ctx = replaceType ctx uf, node = LetBlock (mapFunc <$> decls) (applySubstitution body uf) 
+  }
+  where 
+    mapFunc Assigment { varName, expectedType, assignValue } = Assigment { 
+          assignValue = applySubstitution assignValue uf, ..
+      }
+
+applySubstitution Ast { ctx,  node = RefAssignment ref value } uf = Ast {
+    ctx = replaceType ctx uf, node = RefAssignment (applySubstitution ref uf) (applySubstitution value uf)  
+  }
+
+applySubstitution Ast { ctx,  node = If {condition, body, elseBody} } uf = Ast {
+    ctx = replaceType ctx uf, node = If { 
+          condition = applySubstitution condition uf,
+          body      = applySubstitution body uf,
+          elseBody  =  (`applySubstitution` uf) <$> elseBody
+      }
+  }
+
+applySubstitution Ast { ctx,  node = Sequence fst snd } uf = Ast {
+    ctx = replaceType ctx uf, node = Sequence (applySubstitution fst uf) (applySubstitution snd uf)
+  }
+
+applySubstitution Ast { ctx,  node = While cond body } uf = Ast {
+    ctx = replaceType ctx uf, node = While (applySubstitution cond uf) (applySubstitution body uf)
+  }
+
+applySubstitution Ast { ctx, node } uf = Ast { ctx = replaceType ctx uf, node }
+
+replaceType :: Type -> TypedUnionFind -> Type
+replaceType t@(TypeVar x)       uf = fromMaybe t $ Uf.lookupRepr x uf
+replaceType (FuncType args ret) uf = ((`replaceType` uf) <$> args) `FuncType` replaceType ret uf
+replaceType (FreeType _ tp)     uf = replaceType tp uf
 
 makeError' :: Token -> String -> Result a
 makeError' Token { Types.line, Types.position } msg = 
