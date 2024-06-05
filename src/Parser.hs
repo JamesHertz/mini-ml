@@ -27,8 +27,8 @@ Context free grammar:
 
 <program>    ::=  <decl> EOF
 <decl>       ::=  <sequence> | <letBlock> | <whileExpr> | <ifExpr>
-<letBlock>   ::= "let" ( Id (":"<type>)? "=" <decl> )+ "in" <decl> "end" 
-<funDecl>    ::= "fun" ( ( "(" Id ":" <type> ")" )* | "()" ) (":" <type>)"->" <decl> "end"
+<letBlock>   ::= "let" ( Id (":"<type>)? "=" <decl> ";;" )+ "in" <decl> "end" 
+<funDecl>    ::= "fun" <func-pars> "->" <decl> "end"
 <sequence>   ::= <assigment> (";" <sequence>)*
 <assigment>  ::= <expr> (":=" <assigment>)?
 <expr>       ::= <logicalOr>  ( "&&" <logicalOr> )*
@@ -42,6 +42,7 @@ Context free grammar:
                   
 <ifExpr>     ::= "if" <expr> "then" <decl> ("else" <decl>)? "end"
 <whileExpr>  ::= "while" <expr> "do" <decl> "end"
+<func-pars>  ::= "()" | ( "(" Id ":" <type> ")" | Id )+
 
 <type>       ::=  "int" | "bool" | "unit" | "ref" <type> | <type> "->" <type>
 
@@ -110,6 +111,7 @@ letAssigments = do
     consume [EQ'] "Expected '=' after variable name."
 
     assignValue  <- decl
+    consume [DOUBLE_SEMI_COLON] "Expected ';;' after each let assigment."
 
     let 
         Token { value = Id varName } = token

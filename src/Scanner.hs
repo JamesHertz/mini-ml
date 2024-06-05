@@ -37,6 +37,7 @@ data TokenValue =
     | NOT   -- tild (~)
     | COLON -- (:)
     | SEMI_COLON
+    | DOUBLE_SEMI_COLON
     | BANG  -- (!)
     -- keywords
     | TRUE
@@ -137,11 +138,9 @@ tokenize' = do
                    '*' -> return TIMES
                    '/' -> return SLASH
 
-                   ')' -> return RIGHT_PAREN
-
                    -- other single chars
+                   ')' -> return RIGHT_PAREN
                    '~' -> return NOT
-                   ';' -> return SEMI_COLON
 
                    -- functions & comparison & refs tokens
                    '(' -> match ')' UNIT_VALUE LEFT_PAREN 
@@ -151,6 +150,8 @@ tokenize' = do
                    '=' -> match '=' EQ_EQ EQ'
                    '!' -> match '=' N_EQ BANG
                    ':' -> match '=' ASSIGN COLON
+                   -- TODO: make it so that if space is added in between gracefully
+                   ';' -> match ';' DOUBLE_SEMI_COLON SEMI_COLON
 
                    '|' -> consume '|' OR  "Expected another '|'."
                    '&' -> consume '&' AND "Expected another '&'."

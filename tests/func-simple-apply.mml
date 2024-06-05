@@ -1,5 +1,5 @@
 let 
-   apply  = fun (f : int -> int) (x : int) -> f x * 2 end
+   apply  = fun (f : int -> int) (x : int) -> f x * 2 end ;;
 in
    println (
         apply (fun (x : int) -> 10 end) 0 + apply (fun (x : int) -> x * 100 end) 5
