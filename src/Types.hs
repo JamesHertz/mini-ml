@@ -11,14 +11,26 @@ import Data.List (intercalate)
 type TypedAst = Ast Type
 type BasicAst = Ast Token
 
+
+type GenId = String
 -- supported types
-data Type = IntType | BoolType | UnitType | RefType Type | FuncType [Type] Type deriving (Eq)
+data Type = 
+      IntType 
+    | BoolType 
+    | UnitType 
+    | RefType Type 
+    | FuncType [Type] Type 
+    | TypeVar GenId
+    | FreeType [GenId] Type
+    deriving (Eq, Ord)
+
 instance Show Type where
     show IntType       = "int"
     show BoolType      = "bool"
     show UnitType      = "unit"
     show (RefType typ) = "ref " ++ show typ
     show (FuncType pars result) = intercalate " -> " $ map show pars ++ [show result]
+    show (TypeVar x)   = "'" ++ x
 
 type TypeToken   = Token
 type TypeContext = (Type, TypeToken)

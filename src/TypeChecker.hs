@@ -10,7 +10,6 @@ import qualified Data.Map as Map
 import qualified Data.Set as Set
 import Control.Monad (foldM, when, forM, foldM_)
 import Errors  
-import Data.Profunctor.Closed (Environment(Environment))
 import Text.Printf (printf)
 import Types
 import Data.Tuple.Extra (thd3, third3)
@@ -184,7 +183,7 @@ typeCheck' Ast { node = Call func args } env = do
                                     return astT
                                 else -- TODO: think if you can improve this error message
                                     makeError (token ast) $ printf "Expected '%s' type but found '%s' type." 
-                                                                   (show expectedType) (show $ type' astT) 
+                                                                    (show expectedType) (show $ type' astT) 
 
                 return  Ast { node = Call funcT funcArgsT, ctx = resultT }
         _  -> makeError (token func) "Expected a function at the left side of a call"

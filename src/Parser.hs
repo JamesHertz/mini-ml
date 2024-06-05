@@ -227,8 +227,10 @@ primary = do
     case value token of 
         LEFT_PAREN -> do
                 res <- decl 
-                consume [RIGHT_PAREN] "Missing enclosing ')'."
-                return res
+                token <- consume [RIGHT_PAREN] "Missing enclosing ')'."
+                -- TODO: substitute token for parenthesis
+                -- return res
+                return $ Ast { node = node res, ctx = token }
 
         UNIT_VALUE -> return . makeAst token $ Unit
         TRUE       -> return . makeAst token $ Bool True
