@@ -83,16 +83,17 @@ calcConstraints ast@Ast { node = If { condition, body, elseBody } } env = do
       )
    ) elseBody
   
-  return (Ast { ctx = retType, node = If condAst bodyAst elseAst }, condCons ++ bodyCons ++ elseCons)
+  return (
+    Ast { ctx = retType, node = If condAst bodyAst elseAst }, 
+    (type' condAst, BoolType, token condition) : condCons ++ bodyCons ++ elseCons
+   )
 
 calcConstraints ast@Ast { node = While cond body } env = do 
   (condAst, condCons) <- calcConstraints cond env
   (bodyAst, bodyCons) <- calcConstraints body env
   return (
     Ast { ctx = UnitType, node = While condAst bodyAst},
-       condCons 
-    ++ bodyCons
-    ++ [ (type' condAst, BoolType, token cond) ]
+    (type' condAst, BoolType, token cond) : condCons ++ bodyCons
    )
 
 calcConstraints ast@Ast { node = Sequence fst snd } env = do 
@@ -134,8 +135,11 @@ calcConstraints ast@Ast { node = Call func args } env = do
     retType <- freshVar
     return (
         Ast { ctx = TypeVar retType, node = Call funcAst argsAst } , 
-           funcCons  
-        ++ (type' funcAst, FuncType (type' <$> argsAst) (TypeVar retType), token func) : argsCons 
+        (
+          type' funcAst, 
+          FuncType (type' <$> argsAst) (TypeVar retType), 
+          token func
+        ) : funcCons  ++ argsCons 
      )
 
 -- identifiers & ref
@@ -169,18 +173,20 @@ calcConstraints ast@Ast { node = LetBlock assigns body } env = do
         funcBody  = applySubstitution funcAst uf
         funcType  = replaceType (type' funcAst) uf
         freeVars  = deduplicate . filter (olderThan var) $ typeVarsOf funcType
-        transCons = (\(f,s,t) -> (replaceType f uf, replaceType s uf, t)) <$> funcCons
-        cons      = filter (\(fst, snd, _ ) -> 
-            not . any (olderThan var) $ typeVarsOf fst ++ typeVarsOf snd 
-          ) transCons
-        valueType = FreeType freeVars funcType
+        -- transCons = (\(f,s,t) -> (replaceType f uf, replaceType s uf, t)) <$> funcCons
+        -- cons      = filter (\(fst, snd, _ ) -> 
+        --     not . any (olderThan var) $ typeVarsOf fst ++ typeVarsOf snd 
+        --   ) transCons
+        valueType = if null freeVars then funcType 
+                    else FreeType freeVars funcType
+
       return (
           Map.insert varName valueType env,
           ( Assigment { 
               varName, 
               expectedType = Nothing, -- no need anymore
               assignValue  = Ast { ctx = valueType, node = node funcBody }
-            }, cons) : arr 
+            }, []) : arr 
         )
        
    mapFunc (env, arr) Assigment { varName, assignValue,  expectedType } = do
@@ -282,4 +288,4 @@ genEqualityConstraints ast@Ast { node = Binary left op right } env = do
      )
 
 return' value = return (value, [])
-deduplicate = toList . fromList
+deduplicate   = toList . fromList

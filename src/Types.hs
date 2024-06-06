@@ -11,7 +11,6 @@ import Data.List (intercalate)
 type TypedAst = Ast Type
 type BasicAst = Ast Token
 
-
 type GenId = String
 -- supported types
 data Type = 
@@ -31,6 +30,8 @@ instance Show Type where
     show (RefType typ) = "ref " ++ show typ
     show (FuncType pars result) = intercalate " -> " $ map show pars ++ [show result]
     show (TypeVar x)   = "'" ++ x
+    -- TODO: add ' in from of variable names c:
+    show (FreeType vars typ) = "forall " ++ intercalate "," vars ++ " => " ++ show typ
 
 type TypeToken   = Token
 type TypeContext = (Type, TypeToken)
