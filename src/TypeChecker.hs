@@ -261,7 +261,7 @@ genBinaryConstraints ast@Ast { node = Binary left op right } env expected result
     (rightAst, rightCons) <- calcConstraints right env
 
     return (
-        Ast { ctx = result, node = Binary leftAst op leftAst },
+        Ast { ctx = result, node = Binary leftAst op rightAst },
         [
             (type' leftAst, expected,  token left),
             (type' rightAst, expected, token right)
@@ -273,7 +273,7 @@ genEqualityConstraints ast@Ast { node = Binary left op right } env = do
     (rightAst, rightCons) <- calcConstraints right env
 
     return (
-        Ast { ctx = BoolType , node = Binary leftAst op leftAst },
+        Ast { ctx = BoolType , node = Binary leftAst op rightAst },
         (type' rightAst, type' leftAst,  token right) : leftCons ++ rightCons
      )
 
