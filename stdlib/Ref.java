@@ -2,8 +2,11 @@ package stdlib;
 public class Ref {
     public Object value;
 
-    // TODO: complete this later
     public String toString(){
-        return "Ref ...";
+      // TODO: complete this later
+      // var hexCode = Integer.toHexString(
+      //     System.identityHashCode(this)
+      // );
+        return "Ref ..."; 
     }
 }

@@ -54,9 +54,9 @@ toJvmType  UnitType    = stdUnit
 toJvmType  (RefType _) = stdRef
 
 data JvmClass = JvmClass {
-      name       :: String,
-      -- TODO: think about this c:
-      fields     :: Map.Map LocId JvmType
+      name        :: String,
+      fields      :: Map.Map LocId JvmType,
+      applyMethod :: Maybe [Instr]
 } deriving Show
 
 -- helper types
@@ -374,7 +374,8 @@ startFrame frameId frameVariables =  do
         depth      = depth + 1,
         frames     = Map.insert frameId JvmClass {
                 name   = show frameId,
-                fields = Map.fromList frameClassFields
+                fields = Map.fromList frameClassFields,
+                applyMethod = Nothing
             } frames,
         ..
     }
