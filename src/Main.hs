@@ -18,6 +18,7 @@ import System.IO.Extra (withTempDir)
 import "Glob" System.FilePath.Glob (glob)
 import System.FilePath (pathSeparator)
 import Text.Printf (printf)
+import Data.Char (isSpace)
 
 -- constants
 lineNumberSize :: Int
@@ -31,7 +32,7 @@ main =  do
     case args of
         [] -> usage
         (flag:_) | flag `elem` ["-h", "--help"] -> usage
-        ("repl": _ ) -> putStrLn "Running the interpreter REPL" >> runInterpreter
+        ("repl": _ ) -> putStrLn "Running the interpreter REPL (use CTRL+D to to close program)" >> runInterpreter
         ("editor":_) -> editorMode
         ("-c":filename:_) -> compileFile  filename
         ("-i":filename:_) -> interpretFile filename
@@ -68,7 +69,6 @@ editorMode =
                          else replicate rem ' ' ++ lineNr
             putStr $ str ++ " | "
             hFlush stdout
-
 
 interpretFile :: String -> IO ()
 interpretFile filename =

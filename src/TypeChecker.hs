@@ -22,7 +22,7 @@ import Data.Tuple.Extra (thd3)
 import Unification (Constraints, applySubstitution, replaceType, unify)
 
 import qualified Data.Map as Map
-import Control.Monad.State (State, runState, get, modify)
+import Control.Monad.State (State, runState, get, modify, evalState)
 
 type TypeEnv   = Map.Map String Type
 type ConsState = ExceptT Error (State Int) 
@@ -30,10 +30,10 @@ type ConsState = ExceptT Error (State Int)
 typeCheck :: BasicAst -> Result TypedAst
 typeCheck ast = do
     let 
-       (value, state)  =  runState (runExceptT $ calcConstraints ast Map.empty) 0
-    (ast', constrs) <- value
+       result   =  evalState (runExceptT $ calcConstraints ast Map.empty) 0
+    (typedAst, constrs) <- result
     subs   <- unify constrs 
-    return $ applySubstitution ast' subs 
+    return $ applySubstitution typedAst subs 
 
 calcConstraints :: BasicAst -> TypeEnv -> ConsState (TypedAst, Constraints)
 calcConstraints Ast { node = Number x } env = return' Ast { ctx = IntType,  node = Number x }
@@ -257,34 +257,24 @@ genComparisonConstraints ast env = genBinaryConstraints ast env IntType BoolType
 
 genBinaryConstraints :: BasicAst -> TypeEnv -> Type -> Type -> ConsState (TypedAst, Constraints)
 genBinaryConstraints ast@Ast { node = Binary left op right } env expected result = do
-    leftC  <- calcConstraints left  env
-    rightC <- calcConstraints right env
-
-    let
-        (leftAst, leftCons)   = leftC
-        (rightAst, rightCons) = rightC
+    (leftAst, leftCons)   <- calcConstraints left  env
+    (rightAst, rightCons) <- calcConstraints right env
 
     return (
         Ast { ctx = result, node = Binary leftAst op leftAst },
         [
             (type' leftAst, expected,  token left),
             (type' rightAst, expected, token right)
-        ]
+        ] ++ leftCons ++ rightCons
      )
 
 genEqualityConstraints ast@Ast { node = Binary left op right } env = do
-    leftC  <- calcConstraints left  env
-    rightC <- calcConstraints right env
-
-    let
-        (leftAst, leftCons)   = leftC
-        (rightAst, rightCons) = rightC
+    (leftAst, leftCons)   <- calcConstraints left  env
+    (rightAst, rightCons) <- calcConstraints right env
 
     return (
         Ast { ctx = BoolType , node = Binary leftAst op leftAst },
-        [
-            (type' rightAst, type' leftAst,  token right)
-        ]
+        (type' rightAst, type' leftAst,  token right) : leftCons ++ rightCons
      )
 
 return' value = return (value, [])
