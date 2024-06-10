@@ -334,7 +334,7 @@ compile' Ast { node = LetBlock assigns body } env = do
       fieldsId    = LocId <$> [startFieldLocId..]
       frameFields = zip fieldsId fieldsType
 
-    prefFrame <- startFrame currFrame frameFields
+    prevFrame <- startFrame currFrame frameFields
     depth     <- gets depth
     result    <- foldM (mapFunc depth currFrame) (env, []) 
                   $ zip assigns frameFields
@@ -355,10 +355,10 @@ compile' Ast { node = LetBlock assigns body } env = do
                     getField currFrame staticLinkLocId (Class frame),
                     Astore 0
                 ]
-            )) prefFrame
+            )) prevFrame
 
     bodyInstrs <- compile' body newEnv 
-    endFrame prefFrame
+    endFrame prevFrame
     return  $ [
             New $ show currFrame,
             Dup,
@@ -373,6 +373,7 @@ compile' Ast { node = LetBlock assigns body } env = do
         mapFunc envDepth frameId (newEnv, fieldInstrs) (
                 Assigment { varName, assignValue }, (fieldId, fieldType)
          ) = do
+            -- let newEnv = 
             instrs  <- compile' assignValue newEnv
             return ( 
                 Map.insert varName VarInfo { 
@@ -544,10 +545,10 @@ startFrame classId frameVariables =  do
     return prefFrame
 
 endFrame :: Maybe ClassId -> CompilerState ()
-endFrame lastFrame = 
+endFrame previousFrame = 
     modify $ \ Context { .. } -> Context {
         depth = depth - 1,
-        lastFrame,
+        lastFrame = previousFrame,
         ..
     }
 

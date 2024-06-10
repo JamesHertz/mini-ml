@@ -5,9 +5,9 @@ import Serializer
 import Core
 import Errors
 
-import Control.Monad (unless, foldM_, void)
+import Control.Monad (unless, foldM_, void, when)
 import System.IO (hFlush, stdout, hGetContents, openTempFile, hPutStrLn, stderr, print, hPutStr, hClose, putStrLn)
-import System.Environment (getArgs, getProgName)
+import System.Environment (getArgs, getProgName, getEnv, lookupEnv)
 import System.Exit (exitFailure)
 import System.Directory (removeFile, getCurrentDirectory)
 import System.Process (rawSystem)
@@ -16,9 +16,10 @@ import System.IO.Error (isDoesNotExistError)
 import Language.Preprocessor.Cpphs (filename)
 import System.IO.Extra (withTempDir)
 import "Glob" System.FilePath.Glob (glob)
-import System.FilePath (pathSeparator)
+import System.FilePath (pathSeparator, splitExtension, takeBaseName)
 import Text.Printf (printf)
 import Data.Char (isSpace)
+import Data.Maybe (isJust)
 
 -- constants
 lineNumberSize :: Int
@@ -94,19 +95,25 @@ compileFile filename =
                     let subTmpFile :: String -> String
                         subTmpFile = printf "%s%c%s" baseDir pathSeparator
 
+                    debug <- lookupEnv "DEBUG"
+                    let displayDebugInfo = isJust debug
+
                     jasmFiles <- mapM (\JvmClassFile {fileName, content} -> 
                         let 
                             fullFileName = subTmpFile fileName
                         in do
                             writeFile fullFileName content
-                            -- TODO: add paramters for debugging c:
-                            putStrLn $ "file: " ++ fullFileName
-                            putStrLn content
-                            putStrLn "------------------\n"
+                            when displayDebugInfo $ do
+                                putStrLn $ "file: " ++ fullFileName
+                                putStrLn content
+                                putStrLn "------------------\n"
+
                             return fullFileName
                      ) $ serialize program
 
-                    let classDir    = subTmpFile "classes"
+                    let 
+                        classDir    = subTmpFile "classes"
+                        outputFile  = printf "%s.jar" (takeBaseName filename)
 
                     -- TODO: start compiling once and just copy them c:
                     stdLibFiles <- glob "stdlib/*.java"
@@ -114,11 +121,11 @@ compileFile filename =
                     rawSystem "javac" $ ["-d", classDir] ++ stdLibFiles
 
                     rawSystem "jar" [ 
-                        "--create", "--file", "bin/program.jar", -- TODO: find a way of specifying jar name
+                        "--create", "--file", outputFile,
                         "--main-class", "Main", "-C", classDir, "."
                       ]
 
-                    putStrLn "Saved program as 'bin/program.jar'!"
+                    printf "Saved program as '%s'!\n" outputFile
                     return ()
    where 
         readHandler :: IOError -> IO a

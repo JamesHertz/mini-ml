@@ -4,3 +4,4 @@ bin/*
 *.txt
 docs/*
 !docs/*.md
+*.jar
