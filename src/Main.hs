@@ -137,7 +137,7 @@ runInterpreter = do
             case interpretProgram line of
                 Left err -> putStrLn $ formatErr line err
                 Right value -> do 
-                    value' <- value -- FIXME: decide what to do with this c:
+                    value' <- value
                     putStrLn $ " : " ++ show value' -- this will only happen for REPL
             prompt
 
@@ -150,14 +150,11 @@ printError msg = do
 usage :: IO a
 usage = do
     name <- getProgName
-    -- TODO: 
-    --       * use a better error message
-    --       * add flags -i and -c to decide between compiling and interpreting
-    hPutStrLn stderr $ "Usage: " ++ name ++ " [-h|--help] <command> \n"
-    hPutStrLn stderr "\
-\Where <command> can be:                                            \n\
-\      repl          to run a REPL interpreter                      \n\
-\      editor        to run a simple editor mode with lines numbers \n\
-\      -i | -c FILE  to interpret or respectively compile (to JVM) FILE"
+    hPutStrLn stderr $ unlines[
+        "Usage: " ++ name ++ " [-h|--help] <command>\n",
+        "Where <command> can be:",
+        "      repl          to run a REPL interpreter",
+        "      editor        to run a simple editor mode with lines numbers",
+        "      -i | -c FILE  to interpret or respectively compile (to JVM) FILE"
+     ]
     exitFailure
-
