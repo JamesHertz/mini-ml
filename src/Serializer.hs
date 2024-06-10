@@ -100,8 +100,8 @@ serialize (instrs, classes) =
                         printf ".field public %s %s" (show loc) (serializeType typ) :: String
                     ) $ Map.assocs fields
                 (implements, applyFunction) = case classId of 
-                    Func  _ -> (".implements " ++ show stdFunc, printf applyMethodFormat (instrsToText $ fromJust applyMethod))
-                    Frame _ -> ("; no implements c:", "")
+                    Closure _ -> (".implements " ++ show stdFunc, printf applyMethodFormat (instrsToText $ fromJust applyMethod))
+                    Frame   _ -> ("; no implements c:", "")
                 -- fmtFields' = 
                 --     if null fmtFields then fmtFields
                 --     else "\n" : fmtFields
@@ -141,6 +141,10 @@ serializeInstr (GetStatic fieldSpec typ') = printf "getstatic %s %s" fieldSpec (
 serializeInstr (PutField  fieldSpec typ') = printf "putfield %s %s"  fieldSpec (serializeType typ')
 serializeInstr (GetField  fieldSpec typ') = printf "getfield %s %s"  fieldSpec (serializeType typ')
 serializeInstr (CheckCast classSpec) = "checkcast " ++ show classSpec
+
+-- functions stuffs c:
+serializeInstr (InvokeInterface methodSpec argsNr) = printf "invokeinterface %s %d" methodSpec argsNr
+serializeInstr (AnewArray typ') = "anewarray " ++ show typ'
 
 -- serializeInstr AconstNull = "aconst_null"
 serializeInstr instr      = map toLower (show instr)

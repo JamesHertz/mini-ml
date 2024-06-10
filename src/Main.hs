@@ -123,7 +123,7 @@ compileFile filename =
    where 
         readHandler :: IOError -> IO a
         readHandler e 
-            |  isDoesNotExistError e = printError $ "File '" ++ filename ++ "' not file."
+            |  isDoesNotExistError e = printError $ "File '" ++ filename ++ "' not found."
             |  otherwise = printError $ "Unexpected error: " ++ show e
 
 runInterpreter :: IO ()

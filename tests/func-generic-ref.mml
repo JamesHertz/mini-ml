@@ -1,0 +1,12 @@
+let 
+   set = fun x y ->
+           x := y
+         end    ;;
+  x = new 0     ;;
+  y = new false ;;
+in 
+  set y true ;
+  set x 1 ;
+  println !y ;
+  println !x 
+end

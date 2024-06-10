@@ -1,0 +1,9 @@
+let 
+  add    = fun x y -> x + y end ;;
+  addOne = add 1 ;;
+in
+   println ( addOne 10 ) ;
+   println ( addOne 0  ) ;
+   println ( addOne 2  ) 
+end
+  

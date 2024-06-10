@@ -1,0 +1,8 @@
+let
+  inc = fun (ptr : ref int) -> ptr := !ptr + 1 end
+  x   = new 0
+in
+  while inc x < 10 do
+      println !x
+  end
+end

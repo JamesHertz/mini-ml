@@ -1,0 +1,6 @@
+let 
+  r = new (fun x -> x end) ;;
+in
+   r := (fun x -> x + 1 end) ;
+   println ((!r) false)
+end

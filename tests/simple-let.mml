@@ -1,0 +1,6 @@
+let 
+   x = 10 ;;
+   y = 20 ;;
+in 
+   println (x + y)
+end

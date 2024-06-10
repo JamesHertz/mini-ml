@@ -33,6 +33,8 @@ import Data.Maybe (fromJust)
 import Text.Parsec (letter)
 import Text.Megaparsec.Byte (letterChar)
 import Data.Functor ((<&>))
+import Control.Monad (zipWithM)
+import Data.Profunctor.Closed (Environment)
 
 type JvmProgram = ([Instr], [JvmClass])
 -- TODO: think if you really want a Frame type c:
@@ -49,6 +51,10 @@ instance Show JvmType where
     show (Class id)    = show id
     -- show (Interface id) = show id
 
+-- methodsSpecs
+-- TODO: use this (some day)
+-- applyMethodSpec = "apply([Ljava/lang/Object;)Ljava/lang/Object;"
+
 -- stdlib and builting classes
 stdUnit = Class $ Default "stdlib/Unit"
 stdRef  = Class $ Default "stdlib/Ref"
@@ -63,15 +69,14 @@ toJvmType  IntType        = JvmInt
 toJvmType  BoolType       = JvmBool
 toJvmType  UnitType       = stdUnit
 toJvmType  (RefType _)    = stdRef
-toJvmType  (TypeVar _)    = jvmBoolWrapper
+toJvmType  (TypeVar _)    = jvmObjectClass
 toJvmType  (FuncType _ _) = stdFunc
--- toJvmType  (TypeVar _) = jvmBoolWrapper
 
 toJvmWrapper :: Type -> JvmType
 toJvmWrapper typ =
     case typ of
         IntType  -> jvmIntWrapper 
-        BoolType -> jvmIntWrapper 
+        BoolType -> jvmBoolWrapper
         _        -> toJvmType typ
 
 fromClass :: JvmType -> ClassId
@@ -89,6 +94,7 @@ type Label = String
 type FieldSpec  = String
 type ClassSpec  = String -- TODO: JvmType
 type MethodSpec = String
+type ArgsNr     = Int
 
 data Instr = 
       IAdd
@@ -115,6 +121,8 @@ data Instr =
 
     -- array functions
     | Aaload
+    | Aastore
+    | AnewArray JvmType
     
     | New ClassSpec
     | CheckCast ClassId
@@ -126,9 +134,10 @@ data Instr =
     | GetStatic FieldSpec JvmType
 
     -- TODO: you might need to change the setting below
-    | Invoke        MethodSpec
-    | InvokeStatic  MethodSpec
-    | InvokeSpecial MethodSpec
+    | Invoke          MethodSpec
+    | InvokeStatic    MethodSpec
+    | InvokeSpecial   MethodSpec
+    | InvokeInterface MethodSpec ArgsNr
     | Dup
     | Pop
     | Nop
@@ -145,10 +154,10 @@ instance Show Cond where
   show CGE = "ge"
 
 -- types used to identify frames and fields locations/names
-data ClassId = Frame Int | Func Int | Default String deriving(Ord, Eq)
+data ClassId = Frame Int | Closure Int | Default String deriving(Ord, Eq)
 instance Show ClassId where
     show (Frame id)     = printf "Frame_%d" id
-    show (Func id)      = printf "Func_%d" id
+    show (Closure id)      = printf "Closure_%d" id
     show (Default name) = name
 
 data FieldId = LocId Int | FieldName String deriving(Ord, Eq)
@@ -191,6 +200,9 @@ unWrapValue _  = Nop
 invokeMethod :: JvmType -> MethodSpec -> Instr
 invokeMethod (Class id) spec = Invoke $ printf "%s/%s" (show id) spec
 
+invokeInterfaceMethod :: JvmType -> MethodSpec -> ArgsNr -> Instr
+invokeInterfaceMethod (Class id) spec = InvokeInterface (printf "%s/%s" (show id) spec)
+
 putField :: Show a => ClassId -> a -> JvmType -> Instr
 putField klass field = PutField $ printf "%s/%s" (show klass) (show field)
 
@@ -201,7 +213,7 @@ getField klass field = GetField $ printf "%s/%s" (show klass) (show field)
 data Context = Context {
     labelCount   :: Int,
     frameIdCount :: Int,
-    funcIdCount  :: Int,
+    closureIdCount  :: Int,
     depth        :: Int,
     classes      :: Map.Map ClassId JvmClass,
     lastFrame    :: Maybe ClassId
@@ -221,13 +233,13 @@ type CompilerState = State Context
 compile :: TypedAst -> JvmProgram
 compile ast = 
     let 
-        (instrs, state)  = runState (compile' ast Map.empty) $ Context {
-            labelCount   = 0,
-            frameIdCount = 0,
-            funcIdCount  = 0,
-            depth        = 0,
-            classes      = Map.empty,
-            lastFrame    = Nothing
+        (instrs, state)     = runState (compile' ast Map.empty) $ Context {
+            labelCount      = 0,
+            frameIdCount    = 0,
+            closureIdCount  = 0,
+            depth           = 0,
+            classes         = Map.empty,
+            lastFrame       = Nothing
          }
     in (instrs, Map.elems $ classes state)
 
@@ -397,24 +409,24 @@ compile' Ast { node = Var name } env = do
 
 
 compile' ast@Ast { node = FuncDecl pars body } env = do 
-  funcId <- genFuncId
+  closureId <- genClosureId
 
   let 
     FuncType parsType resultType =  type' ast
     fieldsType  = toJvmType <$> parsType
     fieldsId    = LocId <$> [startFieldLocId..]
     fields      = zip fieldsId fieldsType
-    unwrapInstr = join $ zip fieldsId parsType <&> \(LocId idx, typ) -> [
+    unwrapInstr = join $ zip3 [0..] fieldsId parsType <&> \(idx, fieldId, typ) -> [
         Aload 0,
         Aload 1,
         SIpush idx,
         Aaload,
         castToJvmWrapper typ,
         unWrapValue typ,
-        putField funcId (LocId idx) $ toJvmType typ -- TODO: should I do anything?
+        putField closureId fieldId $ toJvmType typ
       ] 
 
-  prevFrame <- startFrame funcId fields
+  prevFrame <- startFrame closureId  fields
   depth     <- gets depth
 
   let 
@@ -422,23 +434,79 @@ compile' ast@Ast { node = FuncDecl pars body } env = do
     fieldsInfo = zip3 fieldsName fieldsId fieldsType
     newEnv     = foldl (\ env (name, fieldId, fieldType) -> 
                           Map.insert name VarInfo { 
-                            envDepth = depth, frameId = funcId, ..
+                            envDepth = depth, frameId = closureId, ..
                           } env
                        ) env fieldsInfo
+    staticLinkSetup = maybe [] (\tp -> [
+                          Dup,
+                          Aload 0,
+                          putField closureId staticLinkLocId $ Class tp
+                        ]) prevFrame
 
   
   bodyInstrs <- compile' body newEnv
 
-  setFuncBody funcId $ unwrapInstr ++ bodyInstrs ++ [wrapValue resultType]
+  setClosureBody closureId $ unwrapInstr ++ bodyInstrs ++ [wrapValue resultType]
   endFrame prevFrame
-  return [
-       New $ show funcId,
+  return $ [
+       New $ show closureId,
        Dup,
-       invokeConstructor funcId
-   ]
+       invokeConstructor closureId
+    ] ++ staticLinkSetup
+       
 
-setFuncBody :: ClassId -> [Instr] -> CompilerState ()
-setFuncBody func@(Func _) instrs = do 
+compile' ast@Ast { node = Call func args } env = do 
+  funcInstrs <- compile' func env
+
+  let returnType = type' ast
+
+  wrapInstrs <- wrapFuncArgs args env
+  return $ funcInstrs
+     ++ wrapInstrs
+     ++ [ 
+          invokeInterfaceMethod stdFunc "apply([Ljava/lang/Object;)Ljava/lang/Object;" 2, -- its always gonna be 2 c:
+          castToJvmWrapper returnType,
+          unWrapValue returnType
+        ]
+
+
+compile' ast@Ast { node = PartialApplication func args } env = do 
+  funcInstrs <- compile' func env
+  wrapInstrs <- wrapFuncArgs args env
+  let 
+    funcClassName   = show stdFunc
+    jvmObjClassName = show jvmObjectClass
+  return $   funcInstrs 
+          ++ wrapInstrs
+          ++ [InvokeStatic $ 
+              printf "stdlib/Utils/partialApplication(L%s;[L%s;)L%s;" 
+                      funcClassName jvmObjClassName funcClassName
+             ]
+  -- static Func partialApplication(Func func, Object[] extra){
+  
+
+wrapFuncArgs :: [TypedAst]-> CompilerEnv -> CompilerState [Instr]
+wrapFuncArgs args env = do
+  argsWrapInstrs <- zipWithM (
+      \ arg idx -> do
+            argInstrs <- compile' arg env
+            return $ [
+              Dup,
+              SIpush idx
+              ] ++ argInstrs
+                ++ [
+                  wrapValue $ type' arg,
+                  Aastore
+                ]
+    ) args [0..]
+
+  return $ [
+              SIpush $ length args,
+              AnewArray jvmObjectClass
+           ] ++ join argsWrapInstrs
+
+setClosureBody :: ClassId -> [Instr] -> CompilerState ()
+setClosureBody func@(Closure _) instrs = do 
   classes <- gets classes
   let 
     Just JvmClass { .. }= Map.lookup func classes
@@ -542,11 +610,11 @@ genFrameId = do
     modify $ \Context {..} -> Context{ frameIdCount = id + 1, .. }
     return $ Frame id
 
-genFuncId :: CompilerState ClassId
-genFuncId = do
-    id <- gets funcIdCount
-    modify $ \Context {..} -> Context{ funcIdCount = id + 1, .. }
-    return $ Func id
+genClosureId :: CompilerState ClassId
+genClosureId = do
+    id <- gets closureIdCount
+    modify $ \Context {..} -> Context{ closureIdCount = id + 1, .. }
+    return $ Closure id
 
 genLabel :: CompilerState Label
 genLabel = do
