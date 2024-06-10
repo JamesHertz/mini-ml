@@ -1,8 +1,0 @@
-let
-  apply = fun (f : int -> bool) (x : int) -> 
-            if f x then 0 else 11 end
-          end
-  f     = fun (y : int) -> y * 2 end
-in
-  apply f 10
-end

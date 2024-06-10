@@ -1,6 +1,0 @@
-let 
-   apply = fun f x -> f x end ;;
-   add   = fun x y -> x + y end ;;
-in
-   println( apply (add 1) 1 )
-end

@@ -1,8 +1,0 @@
-let 
-   func = fun x y -> x y end ;;
-   inc  = fun x -> x + 1 end ;;
-   not  = fun x -> ~x end    ;;
-in
-    println (func not true) ;
-    println (func inc 1) inc false
-end

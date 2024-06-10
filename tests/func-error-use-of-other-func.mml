@@ -1,8 +1,0 @@
-let 
-  f = fun x -> x + 1 end ;;
-  g = fun y -> if y then f y 
-               else 10 end
-      end ;;
-in
-  println ( g 10 )
-end

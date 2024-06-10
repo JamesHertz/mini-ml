@@ -1,5 +1,0 @@
-let 
-   func = fun () -> 10 end ;;
-in
-  func () + 1
-end

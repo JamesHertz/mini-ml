@@ -8,7 +8,9 @@ module Compiler(
     JvmProgram,
     JvmType(..),
     JvmClass(..),
-    FieldId
+    FieldId(..),
+    ClassId(..),
+    stdFunc
 ) where
 
 -- TODO: 
@@ -42,9 +44,9 @@ data JvmType    =
     -- | Interface String
 
 instance Show JvmType where
-    show JvmInt       = "I"
-    show JvmBool      = "Z"
-    show (Class id)   = show id
+    show JvmInt        = "I"
+    show JvmBool       = "Z"
+    show (Class id)    = show id
     -- show (Interface id) = show id
 
 -- stdlib and builting classes
@@ -57,11 +59,12 @@ jvmObjectClass = Class $ Default "java/lang/Object"
 jvmPrintStream = Class $ Default "java/io/PrintStream"
 
 toJvmType :: Type -> JvmType
-toJvmType  IntType     = JvmInt
-toJvmType  BoolType    = JvmBool
-toJvmType  UnitType    = stdUnit
-toJvmType  (RefType _) = stdRef
-toJvmType  (TypeVar _) = jvmBoolWrapper
+toJvmType  IntType        = JvmInt
+toJvmType  BoolType       = JvmBool
+toJvmType  UnitType       = stdUnit
+toJvmType  (RefType _)    = stdRef
+toJvmType  (TypeVar _)    = jvmBoolWrapper
+toJvmType  (FuncType _ _) = stdFunc
 -- toJvmType  (TypeVar _) = jvmBoolWrapper
 
 toJvmWrapper :: Type -> JvmType
@@ -171,8 +174,8 @@ pushUnit = GetStatic "stdlib/Unit/SINGLE" stdUnit
 castToJvmWrapper :: Type -> Instr
 castToJvmWrapper typ = CheckCast . fromClass $ toJvmWrapper typ
 
-invokeConstructor :: JvmType -> Instr
-invokeConstructor (Class id) = InvokeSpecial $ printf "%s/<init>()V" (show id)
+invokeConstructor :: ClassId -> Instr
+invokeConstructor id = InvokeSpecial $ printf "%s/<init>()V" (show id)
 
 wrapValue :: Type -> Instr
 wrapValue IntType  = InvokeStatic "java/lang/Integer/valueOf(I)Ljava/lang/Integer;"
@@ -200,7 +203,7 @@ data Context = Context {
     frameIdCount :: Int,
     funcIdCount  :: Int,
     depth        :: Int,
-    classes      ::  Map.Map ClassId JvmClass,
+    classes      :: Map.Map ClassId JvmClass,
     lastFrame    :: Maybe ClassId
  }
 
@@ -347,7 +350,7 @@ compile' Ast { node = LetBlock assigns body } env = do
     return  $ [
             New $ show currFrame,
             Dup,
-            InvokeSpecial $ printf "%s/<init>()V" (show currFrame)
+            invokeConstructor currFrame
          ] 
         ++ staticLinkSetup
         ++ [ Astore 0 ]
@@ -397,27 +400,59 @@ compile' ast@Ast { node = FuncDecl pars body } env = do
   funcId <- genFuncId
 
   let 
-    FuncType pars result =  type' ast
-    fieldsType  = toJvmType <$> pars
+    FuncType parsType resultType =  type' ast
+    fieldsType  = toJvmType <$> parsType
     fieldsId    = LocId <$> [startFieldLocId..]
     fields      = zip fieldsId fieldsType
-    unwrapInstr = join $ zip fieldsId pars <&> \(LocId idx, typ) -> [
+    unwrapInstr = join $ zip fieldsId parsType <&> \(LocId idx, typ) -> [
         Aload 0,
         Aload 1,
         SIpush idx,
         Aaload,
-        castToJvmWrapper typ
+        castToJvmWrapper typ,
+        unWrapValue typ,
+        putField funcId (LocId idx) $ toJvmType typ -- TODO: should I do anything?
       ] 
 
   prevFrame <- startFrame funcId fields
-  -- do instructions for um wrap c:
-    -- prefFrame <- startFrame currFrame frameFields
-    -- depth     <- gets depth
+  depth     <- gets depth
+
+  let 
+    fieldsName = fst3 <$> pars
+    fieldsInfo = zip3 fieldsName fieldsId fieldsType
+    newEnv     = foldl (\ env (name, fieldId, fieldType) -> 
+                          Map.insert name VarInfo { 
+                            envDepth = depth, frameId = funcId, ..
+                          } env
+                       ) env fieldsInfo
+
   
+  bodyInstrs <- compile' body newEnv
 
-  return []
+  setFuncBody funcId $ unwrapInstr ++ bodyInstrs ++ [wrapValue resultType]
+  endFrame prevFrame
+  return [
+       New $ show funcId,
+       Dup,
+       invokeConstructor funcId
+   ]
 
+setFuncBody :: ClassId -> [Instr] -> CompilerState ()
+setFuncBody func@(Func _) instrs = do 
+  classes <- gets classes
+  let 
+    Just JvmClass { .. }= Map.lookup func classes
 
+  modify $ \ Context { .. } -> Context {
+      classes = Map.insert func JvmClass {
+          applyMethod = Just instrs,
+          ..
+        } classes,
+      ..
+    }
+
+  return ()
+  
 -- TODO: handle this
 startFrame :: ClassId -> [(FieldId, JvmType)] -> CompilerState (Maybe ClassId)
 startFrame classId frameVariables =  do
@@ -467,6 +502,7 @@ compilePrints value typ =
         printType              = (map toLower $ show value)
         (load, store, jvmType) =  
             case typ of
+            -- FIXME: yeah change this c:
                 IntType  -> (Iload, Istore, "I")
                 BoolType -> (Iload, Istore, "Z")
                 _        -> (Aload, Astore, "Ljava/lang/Object;")
@@ -474,7 +510,6 @@ compilePrints value typ =
             [ GetStatic "java/lang/System/out" jvmPrintStream ],
             [
                 invokeMethod jvmPrintStream $ printf "%s(%s)V" printType jvmType,
-                -- Invoke $ printf "%s(%s)V" printType jvmType,
                 pushUnit
             ]
         )
@@ -486,7 +521,7 @@ compileNew valueType' =
         New $ show stdRef,
         Dup, -- one for init
         Dup, -- and one for put field (the last one is because its the value)
-        invokeConstructor stdRef
+        invokeConstructor $ fromClass stdRef
     ],
     [ 
       wrapValue valueType' ,

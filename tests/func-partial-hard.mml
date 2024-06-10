@@ -1,7 +1,0 @@
-let 
-  print2 = fun x y -> println x ; println y end ;;
-  print1 = print2 10 ;;
-in
-  print1 () ;
-  print1 true
-end

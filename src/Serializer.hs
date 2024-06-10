@@ -3,11 +3,12 @@ module Serializer (
     JvmClassFile(..)
 ) where
 
-import Compiler  (Instr(..), JvmProgram, JvmClass(..), JvmType(..))
+import Compiler  (Instr(..), JvmProgram, JvmClass(..), JvmType(..), ClassId(..), stdFunc)
 import Data.List (intercalate)
 import Data.Char (toLower)
 import Text.Printf (printf)
 import qualified Data.Map as Map
+import Data.Maybe (fromJust)
 
 data JvmClassFile = JvmClassFile {
     fileName :: String,
@@ -19,13 +20,27 @@ defaultClassFormat = unlines [
  ".source \"%s\"",
  ".class public %s", -- class name c:
  ".super java/lang/Object\n",
+ "%s", -- implements stuffs
+ "",
  "%s", -- fields
  ".method public <init>()V",
  "   aload_0",
  "   invokenonvirtual java/lang/Object/<init>()V",
  "   return",
- ".end method"
+ ".end method",
+ ""
  ] 
+
+applyMethodFormat = unlines [
+  ".method public apply([Ljava/lang/Object;)Ljava/lang/Object;",
+  "   .limit locals 2",
+  "   .limit stack 256",
+  "",
+  "%s", -- classBody
+  "    areturn",
+  ".end method",
+  ""
+ ]
 
 mainClassFormat  = defaultClassFormat ++ unlines [
    "",
@@ -36,7 +51,7 @@ mainClassFormat  = defaultClassFormat ++ unlines [
    "%s",
    "    return",
    ".end method"
-    ]
+  ]
 
 -- TODO: learn to use cabal and try to use the package below
 --
@@ -77,32 +92,37 @@ serialize (instrs, classes) =
     in mainFile : regularFiles
 
     where 
-        mapFunc JvmClass { classId, fields } = 
+        mapFunc JvmClass { classId, fields, applyMethod } = 
             let 
                 name      = show classId
                 fileName  = name ++ ".jasm"
                 fmtFields = map (\(loc, typ) -> 
                         printf ".field public %s %s" (show loc) (serializeType typ) :: String
                     ) $ Map.assocs fields
+                (implements, applyFunction) = case classId of 
+                    Func  _ -> (".implements " ++ show stdFunc, printf applyMethodFormat (instrsToText $ fromJust applyMethod))
+                    Frame _ -> ("; no implements c:", "")
                 -- fmtFields' = 
                 --     if null fmtFields then fmtFields
                 --     else "\n" : fmtFields
 
             in JvmClassFile { 
                 fileName,
-                content  = genFileContent fileName name fmtFields
+                content  = genFileContent fileName name implements fmtFields applyFunction
             }
 
 -- filename classname fields [extra]
-genFileContent :: String -> String -> [String] -> String
-genFileContent filename className fields = 
-    printf defaultClassFormat filename className (unlines fields)
+genFileContent :: String -> String -> String -> [String] -> String -> String
+genFileContent filename className implements fields applyMethod = 
+    printf defaultClassFormat filename className implements (unlines fields) ++ applyMethod
 
 genMainFileContent :: String -> String -> [Instr] -> String
 genMainFileContent fileName className instrs = 
     let
-        instrsText   = unlines $ map (printf "    %s" . serializeInstr) instrs
-    in printf mainClassFormat fileName className "; no fields c:\n" instrsText
+        instrsText   = instrsToText instrs
+    in printf mainClassFormat fileName className "; no implements" "; no fields c:\n" instrsText
+
+instrsToText = unlines . map (printf "    %s" . serializeInstr)
 
 serializeInstr :: Instr -> String
 serializeInstr (ILabel label)        = label ++ ":"

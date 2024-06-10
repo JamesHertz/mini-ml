@@ -1,5 +1,0 @@
-let 
-   f : int -> int = fun (x : int) -> x > 10 end ;;
-in
-   f 10
-end
