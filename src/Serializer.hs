@@ -77,8 +77,9 @@ serialize (instrs, classes) =
     in mainFile : regularFiles
 
     where 
-        mapFunc JvmClass { name, fields } = 
+        mapFunc JvmClass { classId, fields } = 
             let 
+                name      = show classId
                 fileName  = name ++ ".jasm"
                 fmtFields = map (\(loc, typ) -> 
                         printf ".field public %s %s" (show loc) (serializeType typ) :: String
@@ -119,7 +120,7 @@ serializeInstr (InvokeStatic methodSpec)  = "invokestatic  " ++ methodSpec
 serializeInstr (GetStatic fieldSpec typ') = printf "getstatic %s %s" fieldSpec (serializeType typ')
 serializeInstr (PutField  fieldSpec typ') = printf "putfield %s %s"  fieldSpec (serializeType typ')
 serializeInstr (GetField  fieldSpec typ') = printf "getfield %s %s"  fieldSpec (serializeType typ')
-serializeInstr (CheckCast classSpec) = "checkcast " ++ classSpec
+serializeInstr (CheckCast classSpec) = "checkcast " ++ show classSpec
 
 -- serializeInstr AconstNull = "aconst_null"
 serializeInstr instr      = map toLower (show instr)
