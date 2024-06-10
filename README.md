@@ -1,3 +1,5 @@
+[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/yQDhJ1w1)
+
 # ICL-Project
 
 In this repository you will find an haskell's implementation of the portion of the micro-ml programming language [proposed](assigment.pdf) for the first part of the pratical assignment of **ICL**. You will find a **typechecker**, a **parser**,  an **interpreter** and a **compiler** for the language. 
@@ -118,3 +120,4 @@ To represent a unit we used the class found in `stdlib/Unit.java` which has the 
 
 # Type Checker Detail
 One small detail I wanted to point out is that although a branch of the sum type that makes the `AstNode` named `PartialApplication`. This one is not produced by the compiler but, later when doing the substitutions of the types in the end of typecheck function to produced the final `TypedAst` when a call is made with less than the number of arguments expected, that one is turned into a `ParatialApplication` node. Furthermore there was made a small change on the unification algorithm part found in the `unify` function in `src/Unification.hs` file. Which basically when is unifying two functions type if one has more types/expects more types than the other, it will basically match up until the last of the smaller and then unify the result of the smallest with a function that is the rest that wasn't matched. If this explanation sounds weird, just go and check it out. The code is pretty simple. 
+
