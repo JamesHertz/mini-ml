@@ -23,6 +23,7 @@ import Unification (Constraints, applySubstitution, replaceType, unify)
 
 import qualified Data.Map as Map
 import Control.Monad.State (State, runState, get, modify, evalState)
+import Data.List ((\\))
 
 type TypeEnv   = Map.Map String Type
 type ConsState = ExceptT Error (State Int) 
@@ -118,8 +119,7 @@ calcConstraints ast@Ast { node = FuncDecl pars body } env = do
     newEnv   = foldl (\ env (name, _, Just parType) -> Map.insert name parType env ) env newPars'
   (bodyAst, bodyCons) <- calcConstraints body newEnv
 
-  return (Ast { 
-      ctx = FuncType (fromJust . thd3 <$> newPars') (type' bodyAst ), 
+  return (Ast { ctx = FuncType (fromJust . thd3 <$> newPars') (type' bodyAst ), 
       node = FuncDecl newPars' bodyAst }, 
       bodyCons 
     )
@@ -173,10 +173,6 @@ calcConstraints ast@Ast { node = LetBlock assigns body } env = do
         funcBody  = applySubstitution funcAst uf
         funcType  = replaceType (type' funcAst) uf
         freeVars  = deduplicate . filter (olderThan var) $ typeVarsOf funcType
-        -- transCons = (\(f,s,t) -> (replaceType f uf, replaceType s uf, t)) <$> funcCons
-        -- cons      = filter (\(fst, snd, _ ) -> 
-        --     not . any (olderThan var) $ typeVarsOf fst ++ typeVarsOf snd 
-        --   ) transCons
         valueType = if null freeVars then funcType 
                     else FreeType freeVars funcType
 
@@ -191,19 +187,32 @@ calcConstraints ast@Ast { node = LetBlock assigns body } env = do
        
    mapFunc (env, arr) Assigment { varName, assignValue,  expectedType } = do
       (valueAst, valueCons) <- calcConstraints assignValue env
+
+      -- TODO: THINK ABOUT THIS LATER ..
+      -- error $ "type: " ++ show (type' valueAst)
+      -- resultAst <- case (node assignValue, type' valueAst) of 
+      --             (Call _ args , FuncType pars ret) -> do
+      --              let 
+      --                argsLen  = length args
+      --                typeVars = deduplicate . typeVarsOf $ type' valueAst
+      --                usedVars = deduplicate $ take (length args) (pars ++ [ret]) >>= typeVarsOf
+      --                remain   = typeVars \\ usedVars
+      --              error $ printf "type = %s\nremain = %s" (show $ type' valueAst) (show remain)
+      --              return $ if null remain then valueAst
+      --                      else Ast { 
+      --                            ctx  = FreeType remain (type' valueAst),
+      --                            node = node valueAst
+      --                          }
+      --             _ -> return valueAst
       return (
           Map.insert varName (type' valueAst) env,
            ( 
               Assigment { varName, expectedType = Nothing, assignValue = valueAst },
               maybe valueCons (\(typ, token) -> (type' valueAst, typ, token) : valueCons) expectedType
-           )  : arr
+           ) : arr
        )
       
    olderThan y x = length x > length y || length x == length y && x >= y
-   typeVarsOf (FuncType args ret) = (args >>= typeVarsOf) ++ typeVarsOf ret
-   typeVarsOf (TypeVar x) = [x]
-   typeVarsOf (RefType x) = typeVarsOf x
-   typeVarsOf typ = []
 
 calcConstraints ast@Ast { node = Var name } env = 
   -- TODO: instanciate free vars ...
@@ -279,3 +288,9 @@ genEqualityConstraints ast@Ast { node = Binary left op right } env = do
 
 return' value = return (value, [])
 deduplicate   = toList . fromList
+
+typeVarsOf :: Type -> [String]
+typeVarsOf (FuncType args ret) = (args >>= typeVarsOf) ++ typeVarsOf ret
+typeVarsOf (TypeVar x) = [x]
+typeVarsOf (RefType x) = typeVarsOf x
+typeVarsOf typ = []

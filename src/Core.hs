@@ -16,7 +16,7 @@ compileProgram src = do
 
 interpretProgram :: String -> Result (IO Value)
 interpretProgram src =  do
-    tokens <- tokenize src
-    ast    <- parse tokens
-    typeCheck ast
-    return $ eval ast
+    tokens   <- tokenize src
+    ast      <- parse tokens
+    typedAst <- typeCheck ast
+    return $ eval typedAst

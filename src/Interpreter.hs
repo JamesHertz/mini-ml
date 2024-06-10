@@ -1,9 +1,11 @@
+{-# LANGUAGE RecordWildCards #-}
 module Interpreter (
     Value(..),
     eval,
 )where
 
-import Parser ( BasicAst, Ast(..), AstNode(..), Token(..), Assigment(..), Parameter )
+import Parser (Token(..), Assigment(..), Parameter )
+import Types (TypedAst, Ast(..), AstNode(..))
 import Scanner (TokenValue(..))
 import qualified Data.Map as Map
 import Control.Monad (foldM)
@@ -25,13 +27,13 @@ data Value =  IntValue Int
             | BoolValue Bool 
             | Ref Address 
             | UnitValue 
-            | Closure { env            :: Enviroment, 
-                        parametersName :: [ParName], 
-                        -- TODO: add the thing below c:
-                        -- funcType   :: Type, -- used only for printing purposes c:
-                        funcBody       :: BasicAst 
-                       }
-            deriving (Eq)
+            | Closure { 
+                env            :: Enviroment, 
+                parametersName :: [ParName], 
+                funcBody       :: TypedAst,
+                extraArgs      :: [Value] -- used for partial application c: 
+              } deriving (Eq)
+
 instance Show Value where
     show (IntValue  x) = show x
     show (BoolValue x) = show x
@@ -44,10 +46,10 @@ instance Show Value where
 
 type EvalState = StateT (Address, MemoryCells) IO
 
-eval :: BasicAst -> IO Value
+eval :: TypedAst -> IO Value
 eval ast = evalStateT (eval' ast Map.empty) (0, Map.empty)
 
-eval' :: BasicAst -> Enviroment -> EvalState Value
+eval' :: TypedAst -> Enviroment -> EvalState Value
 eval' Ast { node = Number x } env = return $ IntValue x
 eval' Ast { node = Bool x }   env = return $ BoolValue x
 eval' Ast { node = Unit }     env = return UnitValue
@@ -101,7 +103,8 @@ eval' Ast { node = LetBlock assigns body } env = do
               Closure { env, parametersName, funcBody } = value
               -- sending state from the future to the past
               newMap = Map.insert varName Closure {
-                    env = newMap,
+                    extraArgs = [],
+                    env       = newMap,
                     parametersName,
                     funcBody
                 } map
@@ -145,19 +148,30 @@ eval' ast@Ast { node = While cond body } env = do
 eval' Ast { node = FuncDecl pars funcBody } env = do
     let parametersName = fst3 <$> pars
     return Closure { 
-           parametersName, env, funcBody
-        }
+           parametersName, env, funcBody, extraArgs = []
+      }
 
 eval' Ast { node = Call func pars } env = do 
-    closure <- eval' func env
+    closure   <- eval' func env
+    parsValue <- mapM (`eval'` env) pars
     let 
-        Closure { env = closureEnv, parametersName = parsName, funcBody } = closure
-    newCloseEnv <- foldM addToEnv closureEnv $ zip parsName pars
+        Closure { env = closureEnv, parametersName = parsName, funcBody, extraArgs } = closure
+        funcArgs = extraArgs ++ parsValue
+
+    newCloseEnv <- foldM addToEnv closureEnv $ zip parsName funcArgs
     eval' funcBody newCloseEnv
-    where 
-        addToEnv currEnv (name, value) = do 
-            value' <- eval' value env
-            return $ Map.insert name value' currEnv
+
+eval' Ast { node = PartialApplication func pars } env = do 
+    closure   <- eval' func env
+    parsValue <- mapM (`eval'` env) pars
+    let 
+        Closure { env = closureEnv, parametersName = parsName, .. } = closure
+    return Closure { 
+        env = closureEnv, 
+        parametersName = parsName, 
+        extraArgs = extraArgs ++ parsValue,
+        funcBody
+     }
 
 -- memory helper functions
 reserveCell :: Value -> EvalState Value
@@ -178,20 +192,25 @@ setValue :: Address -> Value -> EvalState ()
 setValue address value = modify $ second (Map.insert address value)
     
 -- helper functions
-evalBinary :: (BasicAst -> Enviroment -> EvalState a) -> (a -> a -> b) -> (b -> c) -> BasicAst -> Enviroment -> EvalState c
+evalBinary :: (TypedAst -> Enviroment -> EvalState a) -> (a -> a -> b) -> (b -> c) -> TypedAst -> Enviroment -> EvalState c
 evalBinary evaluator operation wrapper Ast { node = Binary left _ right } env = do
     left'  <- evaluator left env
     right' <- evaluator right env
     return $ wrapper $ left' `operation` right'
 
-evalInt :: BasicAst -> Enviroment -> EvalState Int 
+evalInt :: TypedAst -> Enviroment -> EvalState Int 
 evalInt ast env = do
     value <- eval' ast env
     let (IntValue result) = value
     return result
 
-evalBool :: BasicAst -> Enviroment -> EvalState Bool
+evalBool :: TypedAst -> Enviroment -> EvalState Bool
 evalBool ast env = do
     value <- eval' ast env
     let (BoolValue result) = value
     return result
+
+-- small function used in other places c:
+addToEnv :: Enviroment -> (String, Value) ->  EvalState Enviroment
+addToEnv currEnv (name, value) = 
+  return $ Map.insert name value currEnv

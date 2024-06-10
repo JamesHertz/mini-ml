@@ -100,6 +100,7 @@ data AstNode a =
           | Unary    TokenValue (Ast a)
           | FuncDecl  [Parameter] (Ast a)
           | Call (Ast a) [Ast a]
+          | PartialApplication (Ast a) [Ast a]
           | LetBlock [Assigment a] (Ast a)
           | RefAssignment (Ast a) (Ast a)
           | If { condition :: Ast a, body :: Ast a, elseBody :: Maybe (Ast a) }

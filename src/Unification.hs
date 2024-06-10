@@ -44,8 +44,13 @@ unifyConstraints ((t1, t2, token):xs) uf =
           unifyConstraints xs (Uf.setReprType y x uf'')
 
       -- TODO: handle token better
-      (FuncType args1 ret1, FuncType args2 ret2) | length args1 == length args2 ->
-        unifyConstraints (zipWith (,,token) (ret1 : args1) (ret2 : args2) ++ xs) uf'' 
+      (FuncType args1 ret1, FuncType args2 ret2) ->
+        let 
+          funcTypes1 = args1 ++ [ret1]
+          funcTypes2 = args2 ++ [ret2]
+          funcCons   = map (uncurry (,,token) ) $ matchTypes funcTypes1 funcTypes2
+        in
+          (`unifyConstraints` uf'') $  funcCons ++ xs
 
       (RefType x, RefType y) ->
         unifyConstraints ((x, y, token) : xs) uf''
@@ -57,6 +62,13 @@ unifyConstraints ((t1, t2, token):xs) uf =
     appearsIn typ (FuncType args ret : xs) = appearsIn typ (ret : args) || appearsIn typ xs
     appearsIn typ (RefType tp : xs)        = tp == typ || appearsIn typ xs
     appearsIn typ (x:xs)                   =  x == typ || appearsIn typ xs
+
+    genFuncCons token x y = map (uncurry (,,token) ) $ matchTypes x y
+    -- matchTypes [] []   = []
+    matchTypes [x] [y] = [(x,y)]
+    matchTypes [x] y   = [(x, FuncType (init y) (last y))]
+    matchTypes  x [y]  = [(FuncType (init x) (last x), y)]
+    matchTypes (x:xs) (y:ys) = (x,y) : matchTypes xs ys
 
 updateType t@(TypeVar x) uf = maybe (t, Uf.newRepr x t uf) (,uf) $ Uf.lookupRepr x uf
 updateType (FuncType args ret) uf = 
@@ -91,8 +103,19 @@ applySubstitution Ast { ctx,  node = FuncDecl args body } uf = Ast {
   where 
     mapFunc (name, token, Just typ) =  (name, token, Just $ replaceType typ uf)
 
-applySubstitution Ast { ctx,  node = Call func args } uf = Ast {
-    ctx = replaceType ctx uf, node = Call (applySubstitution func uf) $ (`applySubstitution` uf) <$> args
+applySubstitution Ast { ctx,  node = Call func args } uf = 
+  let 
+    funcT   = applySubstitution func uf
+    argsT   = (`applySubstitution` uf) <$> args
+    (FuncType pars _) = type' funcT
+    nodeBuilder = if length argsT == length pars then Call else PartialApplication
+  in Ast {
+      ctx  = replaceType ctx uf,
+      node = nodeBuilder funcT argsT
+    }
+
+applySubstitution Ast { ctx,  node = PartialApplication func args } uf = Ast {
+    ctx = replaceType ctx uf, node = PartialApplication (applySubstitution func uf) $ (`applySubstitution` uf) <$> args
   }
 
 applySubstitution Ast { ctx,  node = LetBlock decls body } uf = Ast {
