@@ -8,7 +8,7 @@ module Compiler(
     JvmProgram,
     JvmType(..),
     JvmClass(..),
-    LocId
+    FieldId
 ) where
 
 -- TODO: 
@@ -39,15 +39,18 @@ data JvmType    =
     | JvmBool 
     | CustomRef JvmType
     | Class ClassId -- I don't even know what this is doing here c:
+    -- | Interface String
 
 instance Show JvmType where
     show JvmInt       = "I"
     show JvmBool      = "Z"
     show (Class id)   = show id
+    -- show (Interface id) = show id
 
 -- stdlib and builting classes
 stdUnit = Class $ Default "stdlib/Unit"
-stdRef  = Class $ Default "stdlib/Ref" -- TODO: complete this
+stdRef  = Class $ Default "stdlib/Ref"
+stdFunc = Class $ Default "stdlib/Func" -- TODO: think about this
 jvmIntWrapper  = Class $ Default "java/lang/Integer"
 jvmBoolWrapper = Class $ Default "java/lang/Boolean"
 jvmObjectClass = Class $ Default "java/lang/Object"
@@ -59,6 +62,7 @@ toJvmType  BoolType    = JvmBool
 toJvmType  UnitType    = stdUnit
 toJvmType  (RefType _) = stdRef
 toJvmType  (TypeVar _) = jvmBoolWrapper
+-- toJvmType  (TypeVar _) = jvmBoolWrapper
 
 toJvmWrapper :: Type -> JvmType
 toJvmWrapper typ =
@@ -73,7 +77,7 @@ fromClass (Class id) = id
 
 data JvmClass = JvmClass {
       classId     :: ClassId,
-      fields      :: Map.Map LocId JvmType,
+      fields      :: Map.Map FieldId JvmType,
       applyMethod :: Maybe [Instr]
 } deriving Show
 
@@ -124,6 +128,7 @@ data Instr =
     | InvokeSpecial MethodSpec
     | Dup
     | Pop
+    | Nop
 
  deriving Show
 
@@ -143,12 +148,13 @@ instance Show ClassId where
     show (Func id)      = printf "Func_%d" id
     show (Default name) = name
 
-newtype LocId = LocId Int deriving(Ord, Eq)
-instance Show LocId where
+data FieldId = LocId Int | FieldName String deriving(Ord, Eq)
+instance Show FieldId where
     show (LocId id) = printf "loc_%d" id
+    show (FieldName name) = name
 
 -- used to store static link for frames
-staticLinkLocId :: LocId
+staticLinkLocId :: FieldId
 staticLinkLocId = LocId 0 
 
 -- first locId used for frame fields
@@ -168,15 +174,15 @@ castToJvmWrapper typ = CheckCast . fromClass $ toJvmWrapper typ
 invokeConstructor :: JvmType -> Instr
 invokeConstructor (Class id) = InvokeSpecial $ printf "%s/<init>()V" (show id)
 
-wrapValue :: Type -> [Instr]
-wrapValue IntType  = [InvokeStatic "java/lang/Integer/valueOf(I)Ljava/lang/Integer;"]
-wrapValue BoolType = [InvokeStatic "java/lang/Boolean/valueOf(Z)Ljava/lang/Boolean;"]
-wrapValue _        = []
+wrapValue :: Type -> Instr
+wrapValue IntType  = InvokeStatic "java/lang/Integer/valueOf(I)Ljava/lang/Integer;"
+wrapValue BoolType = InvokeStatic "java/lang/Boolean/valueOf(Z)Ljava/lang/Boolean;"
+wrapValue _        = Nop
 
-unWrapValue :: Type -> [Instr]
-unWrapValue IntType  = [invokeMethod jvmIntWrapper "intValue()I"]
-unWrapValue BoolType = [invokeMethod jvmBoolWrapper "booleanValue()Z"]
-unWrapValue _  = []
+unWrapValue :: Type -> Instr
+unWrapValue IntType  = invokeMethod jvmIntWrapper "intValue()I"
+unWrapValue BoolType = invokeMethod jvmBoolWrapper "booleanValue()Z"
+unWrapValue _  = Nop
 
 -- TODO: think about this
 invokeMethod :: JvmType -> MethodSpec -> Instr
@@ -201,7 +207,7 @@ data Context = Context {
 data VarInfo  = VarInfo {
         envDepth  :: Int,
         frameId   :: ClassId,
-        fieldId   :: LocId,
+        fieldId   :: FieldId,
         fieldType :: JvmType
     } deriving Show
 
@@ -297,14 +303,14 @@ compile' Ast { node = RefAssignment ref value } env = do
     valueInstrs <- compile' value env
     return $   refInstrs 
              ++ valueInstrs
-             ++ wrapValue (type' value)
              ++ [
+                wrapValue (type' value),
                 Dup,
                 Astore 1,
                 PutField (printf "%s/value" $ show stdRef) jvmObjectClass,
-                Aload 1
+                Aload 1,
+                unWrapValue (type' value)
              ]
-             ++ unWrapValue (type' value)
 
 compile' Ast { node = LetBlock assigns body } env = do
     currFrame <- genFrameId
@@ -396,11 +402,12 @@ compile' ast@Ast { node = FuncDecl pars body } env = do
     fieldsId    = LocId <$> [startFieldLocId..]
     fields      = zip fieldsId fieldsType
     unwrapInstr = join $ zip fieldsId pars <&> \(LocId idx, typ) -> [
+        Aload 0,
         Aload 1,
         SIpush idx,
         Aaload,
         castToJvmWrapper typ
-      ]
+      ] 
 
   prevFrame <- startFrame funcId fields
   -- do instructions for um wrap c:
@@ -412,7 +419,7 @@ compile' ast@Ast { node = FuncDecl pars body } env = do
 
 
 -- TODO: handle this
-startFrame :: ClassId -> [(LocId, JvmType)] -> CompilerState (Maybe ClassId)
+startFrame :: ClassId -> [(FieldId, JvmType)] -> CompilerState (Maybe ClassId)
 startFrame classId frameVariables =  do
     prefFrame <- gets lastFrame
 
@@ -481,16 +488,18 @@ compileNew valueType' =
         Dup, -- and one for put field (the last one is because its the value)
         invokeConstructor stdRef
     ],
-        wrapValue valueType' 
-    ++ [ PutField (printf "%s/value" $ show stdRef) jvmObjectClass ]
+    [ 
+      wrapValue valueType' ,
+      putField (fromClass stdRef) (FieldName "value") jvmObjectClass 
+    ]
   )
 
 compileDeref :: Type -> [Instr]
 compileDeref (RefType typ) = [
-    GetField (printf "%s/value" $ show stdRef) jvmObjectClass,
-    castToJvmWrapper typ
-  ] ++ unWrapValue typ
-
+    getField (fromClass stdRef) (FieldName "value") jvmObjectClass,
+    castToJvmWrapper typ,
+    unWrapValue typ
+  ]
 
 genFrameId :: CompilerState ClassId
 genFrameId = do
