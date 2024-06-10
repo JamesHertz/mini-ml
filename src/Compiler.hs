@@ -157,7 +157,7 @@ instance Show Cond where
 data ClassId = Frame Int | Closure Int | Default String deriving(Ord, Eq)
 instance Show ClassId where
     show (Frame id)     = printf "Frame_%d" id
-    show (Closure id)      = printf "Closure_%d" id
+    show (Closure id)   = printf "Closure_%d" id
     show (Default name) = name
 
 data FieldId = LocId Int | FieldName String deriving(Ord, Eq)
@@ -370,18 +370,15 @@ compile' Ast { node = LetBlock assigns body } env = do
         ++ bodyInstrs
         ++ staticLinkRestore
     where 
-        mapFunc envDepth frameId (newEnv, fieldInstrs) (
+        mapFunc envDepth frameId (env, fieldInstrs) (
                 Assigment { varName, assignValue }, (fieldId, fieldType)
          ) = do
-            -- let newEnv = 
-            instrs  <- compile' assignValue newEnv
-            return ( 
-                Map.insert varName VarInfo { 
-                        frameId, envDepth, 
-                        fieldId, fieldType
-                    } newEnv,
-                    fieldInstrs ++ [instrs]
-             )
+            let newEnv = Map.insert varName VarInfo { 
+                            frameId, envDepth, 
+                            fieldId, fieldType
+                         } env
+            instrs <- compile' assignValue newEnv
+            return (newEnv, fieldInstrs ++ [instrs])
 
 compile' Ast { node = Var name } env = do 
     case Map.lookup name env of 
@@ -410,7 +407,13 @@ compile' Ast { node = Var name } env = do
 
 
 compile' ast@Ast { node = FuncDecl pars body } env = do 
+
   closureId <- genClosureId
+  frameId   <- genFrameId
+
+  -- small hack to put this closure on the classes map 
+  -- with the static link if needed
+  startFrame closureId [] >>= endFrame 
 
   let 
     FuncType parsType resultType =  type' ast
@@ -424,18 +427,31 @@ compile' ast@Ast { node = FuncDecl pars body } env = do
         Aaload,
         castToJvmWrapper typ,
         unWrapValue typ,
-        putField closureId fieldId $ toJvmType typ
+        putField frameId fieldId $ toJvmType typ
       ] 
 
-  prevFrame <- startFrame closureId  fields
+  prevFrame <- startFrame frameId fields
   depth     <- gets depth
 
   let 
+    framePrelude =  maybe [] (\lastFrame -> [
+        Dup,
+        Aload 0,
+        getField closureId staticLinkLocId $ Class lastFrame,
+        putField frameId staticLinkLocId $ Class lastFrame
+      ]) prevFrame
+    prelude = [
+      New $ show frameId,
+      Dup,
+      invokeConstructor frameId
+     ]  ++ framePrelude 
+        ++ [Astore 0]
+
     fieldsName = fst3 <$> pars
     fieldsInfo = zip3 fieldsName fieldsId fieldsType
     newEnv     = foldl (\ env (name, fieldId, fieldType) -> 
                           Map.insert name VarInfo { 
-                            envDepth = depth, frameId = closureId, ..
+                            envDepth = depth, frameId, ..
                           } env
                        ) env fieldsInfo
     staticLinkSetup = maybe [] (\tp -> [
@@ -447,7 +463,7 @@ compile' ast@Ast { node = FuncDecl pars body } env = do
   
   bodyInstrs <- compile' body newEnv
 
-  setClosureBody closureId $ unwrapInstr ++ bodyInstrs ++ [wrapValue resultType]
+  setClosureBody closureId $ prelude ++ unwrapInstr ++ bodyInstrs ++ [wrapValue resultType]
   endFrame prevFrame
   return $ [
        New $ show closureId,
