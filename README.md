@@ -1,8 +1,6 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/yQDhJ1w1)
-
 # ICL-Project
 
-In this repository you will find an haskell's implementation of the portion of the micro-ml programming language [proposed](assigment.pdf) for the first part of the pratical assignment of **ICL**. You will find a **typechecker**, a **parser**,  an **interpreter** and a **compiler** for the language. 
+In this repository you will find an haskell's implementation of the portion of the micro-ml programming language [proposed](assigment.pdf) for the first part of the pratical assignment of [**ICL**](https://guia.unl.pt/en/2020/fct/program/935/course/8152). You will find a **typechecker**, a **parser**,  an **interpreter** and a **compiler** for the language. 
 
 Due to circumstances we've decided to write the report here in this README file.
 
