@@ -4,6 +4,8 @@ In this repository you will find an haskell's implementation of the portion of t
 
 Due to circumstances we've decided to write the report here in this README file.
 
+**Note:** Even though this project was done as being part of a course I decided to take this one step forward. I did so by refusing to use any external library and/or any sort of parser generator. One can say truly that it was all done from scratch.
+
 # Build & Run
 To build you need to have `ghc` (haskell compiler), `gnu make` and a version of java installed (for the compiler). After making sure you have both installed you can just run `make`, at the root of the repo, and it will drop out of some box an executable which full name from the root the project will be `bin/main`.
 
